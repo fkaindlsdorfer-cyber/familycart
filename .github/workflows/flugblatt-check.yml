@@ -1,0 +1,39 @@
+name: Flugblatt Aktionen prüfen
+
+on:
+  schedule:
+    - cron: '0 7 * * 1'
+    - cron: '0 7 * * 4'
+  workflow_dispatch:
+
+jobs:
+  check-deals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v4
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: System-Tools installieren
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y poppler-utils chromium-browser
+
+      - name: Pakete installieren
+        run: npm install
+        working-directory: ./scripts
+
+      - name: Flugblaetter pruefen und in Firebase speichern
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium-browser
+        run: node check-deals.js
+        working-directory: ./scripts
