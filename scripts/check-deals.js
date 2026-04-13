@@ -234,15 +234,30 @@ async function main() {
   const fbStores   = Object.values(storesSnap.val() || {});
 
   // 2. Artikel aus Firebase laden
-  const articlesSnap = await db.ref("articles").get();
-  const articles     = Object.entries(articlesSnap.val() || {})
-    .map(([key, val]) => ({ ...val, fbKey: key }));
+  // App speichert Artikel unter "items" (Einkaufsliste) und "template" (Zu besorgen)
+  const itemsSnap    = await db.ref("items").get();
+  const templateSnap = await db.ref("template").get();
+
+  const itemsRaw    = itemsSnap.val()    || {};
+  const templateRaw = templateSnap.val() || {};
+
+  // Alle einzigartigen Artikel aus beiden Listen kombinieren
+  const allItemsMap = new Map();
+  [...Object.entries(itemsRaw), ...Object.entries(templateRaw)].forEach(([key, val]) => {
+    if (val.name && !allItemsMap.has(val.name.toLowerCase())) {
+      allItemsMap.set(val.name.toLowerCase(), { ...val, fbKey: key });
+    }
+  });
+  const articles = Array.from(allItemsMap.values());
 
   if (articles.length === 0) {
-    console.log("⚠️  Keine Artikel in der Datenbank – nichts zu tun.");
+    console.log("⚠️  Keine Artikel gefunden (weder in Liste noch in Zu besorgen).");
+    console.log("   → Füge zuerst Artikel in der App hinzu!");
     process.exit(0);
   }
-  console.log(`📦 ${articles.length} Artikel geladen\n`);
+  console.log(`📦 ${articles.length} einzigartige Artikel geladen:`);
+  articles.forEach(a => console.log(`   - ${a.name} ${a.storeId ? "("+a.storeId+")" : "(alle Märkte)"}`));
+  console.log("");
 
   // 3. Alte Deals löschen
   await db.ref("deals").remove();
