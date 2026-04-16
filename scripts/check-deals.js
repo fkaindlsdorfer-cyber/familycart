@@ -18,6 +18,9 @@ import { execSync }            from "child_process";
 import fs                      from "fs";
 import path                    from "path";
 
+// ─── Hilfsfunktionen ────────────────────────────────────────────────────────
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
 // ─── Konfiguration ──────────────────────────────────────────────────────────
 const GEMINI_API_KEY   = process.env.GEMINI_API_KEY;
 const FIREBASE_DB_URL  = process.env.FIREBASE_DATABASE_URL;
