@@ -98,6 +98,7 @@ function pdfToImages(pdfPath, outputDir) {
   const name = path.basename(pdfPath, ".pdf").replace(/[^a-zA-Z0-9]/g, "_");
   ensureDir(outputDir);
   try {
+    // Alle Seiten lesen – Skript läuft nachts, Zeit spielt keine Rolle
     execSync(`pdftoppm -jpeg -r 120 "${pdfPath}" "${path.join(outputDir, name)}"`, { stdio: "pipe" });
     return fs.readdirSync(outputDir)
       .filter(f => f.startsWith(name) && f.endsWith(".jpg"))
@@ -179,8 +180,10 @@ async function downloadPdf(url, destPath) {
   return destPath;
 }
 
-// ─── Gemini: Seite analysieren ────────────────────────────────────────────────
-async function analyzePageWithGemini(imageBase64, articles, storeName) {
+// ─── Gemini: Seite analysieren mit Retry ──────────────────────────────────────
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function analyzePageWithGemini(imageBase64, articles, storeName, retries = 3) {
   const articleList = articles.map(a => `- ${a.name}`).join("\n");
   const prompt = `Das ist eine Seite aus dem aktuellen Flugblatt von ${storeName} Österreich.
 
@@ -192,32 +195,48 @@ Antworte NUR mit JSON:
 Wenn nichts gefunden: {"found":false,"deals":[]}
 Nur echte Angebote die du auf dieser Seite siehst!`;
 
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { inline_data: { mime_type: "image/jpeg", data: imageBase64 } },
-              { text: prompt }
-            ]
-          }],
-          generationConfig: { responseMimeType: "text/plain" },
-        }),
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { inline_data: { mime_type: "image/jpeg", data: imageBase64 } },
+                { text: prompt }
+              ]
+            }],
+            generationConfig: { responseMimeType: "text/plain" },
+          }),
+        }
+      );
+
+      // 429 = Rate Limit → warten und nochmal versuchen
+      if (res.status === 429) {
+        const waitSec = attempt * 30; // 30s, 60s, 90s
+        console.error(`    ⏳ Rate Limit (429) – warte ${waitSec}s... (Versuch ${attempt}/${retries})`);
+        await sleep(waitSec * 1000);
+        continue;
       }
-    );
-    if (!res.ok) throw new Error(`Gemini ${res.status}`);
-    const data = await res.json();
-    const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text||"").join("");
-    const match = text.match(/\{[\s\S]*\}/);
-    return match ? JSON.parse(match[0]) : { found: false, deals: [] };
-  } catch (e) {
-    console.error(`    ⚠️  Gemini Fehler: ${e.message}`);
-    return { found: false, deals: [] };
+
+      if (!res.ok) throw new Error(`Gemini ${res.status}`);
+      const data = await res.json();
+      const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text||"").join("");
+      const match = text.match(/\{[\s\S]*\}/);
+      return match ? JSON.parse(match[0]) : { found: false, deals: [] };
+
+    } catch (e) {
+      if (attempt === retries) {
+        console.error(`    ⚠️  Gemini Fehler nach ${retries} Versuchen: ${e.message}`);
+        return { found: false, deals: [] };
+      }
+      await sleep(15000); // 15s Pause bei anderen Fehlern
+    }
   }
+  return { found: false, deals: [] };
 }
 
 // ─── Hauptprogramm ────────────────────────────────────────────────────────────
@@ -351,8 +370,8 @@ async function main() {
           console.log("─");
         }
 
-        // Pause zwischen Gemini-Anfragen
-        await new Promise(r => setTimeout(r, 600));
+        // 4 Sek. Pause → max 15 Anfragen/Minute (Gemini Free Limit)
+        await sleep(4000);
         // Bild löschen um Speicher zu sparen
         try { fs.unlinkSync(images[i]); } catch {}
       }
