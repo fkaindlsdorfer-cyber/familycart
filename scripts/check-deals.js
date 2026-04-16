@@ -278,8 +278,8 @@ Nur echte Angebote die du im Flugblatt siehst!`;
     return { found: false, deals: [] };
   }
 
-  // Kurz warten bis Datei verarbeitet ist
-  await sleep(3000);
+  // Länger warten bis Datei verarbeitet ist (Gemini braucht Zeit)
+  await sleep(15000);
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
@@ -301,7 +301,7 @@ Nur echte Angebote die du im Flugblatt siehst!`;
       );
 
       if (res.status === 429) {
-        const waitSec = attempt * 60;
+        const waitSec = attempt * 90; // 90s, 180s, 270s
         console.error(`    ⏳ Rate Limit (429) – warte ${waitSec}s... (Versuch ${attempt}/${retries})`);
         await sleep(waitSec * 1000);
         continue;
@@ -507,9 +507,10 @@ async function main() {
         console.log(`  📊 0 Deals in diesem PDF`);
       }
 
-      // PDF löschen + 10 Sek. Pause zwischen PDFs
+      // PDF löschen + 60 Sek. Pause zwischen PDFs (Gemini Rate Limit)
       try { fs.unlinkSync(pdfPath); } catch {}
-      await sleep(10000);
+      console.log(`  ⏳ Warte 60s vor nächstem PDF...`);
+      await sleep(60000);
     }
   }
 
