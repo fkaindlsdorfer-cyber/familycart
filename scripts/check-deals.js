@@ -1,563 +1,194 @@
 /**
- * FamilyCart – Automatischer Flugblatt-Check v3
- * 
+ * My Wagerl – Automatischer Aktions-Check via marktguru.at
+ *
  * Ablauf:
- * 1. Puppeteer öffnet die Flugblatt-Seite jedes Marktes
- * 2. Findet ALLE aktuellen PDF-Links automatisch
- * 3. Lädt alle PDFs herunter (auch mehrere pro Markt)
- * 4. Gemini liest jede Seite als Bild
- * 5. Sucht nach euren Artikeln
- * 6. Speichert Ergebnisse in Firebase
+ * 1. Artikel aus Firebase laden
+ * 2. Jeden Artikel auf marktguru.at suchen (direkte API)
+ * 3. Gefundene Aktionen in Firebase speichern
+ * 4. Benachrichtigung senden
+ *
+ * Kein PDF-Download, kein Gemini, kein Rate Limit!
  */
 
 import { initializeApp, cert } from "firebase-admin/app";
 import { getDatabase }         from "firebase-admin/database";
 import fetch                   from "node-fetch";
-import puppeteer               from "puppeteer";
-import { execSync }            from "child_process";
-import fs                      from "fs";
-import path                    from "path";
 
 // ─── Hilfsfunktionen ────────────────────────────────────────────────────────
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // ─── Konfiguration ──────────────────────────────────────────────────────────
-const GEMINI_API_KEY   = process.env.GEMINI_API_KEY;
 const FIREBASE_DB_URL  = process.env.FIREBASE_DATABASE_URL;
 const FIREBASE_SERVICE = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-const TMP_DIR          = "/tmp/familycart";
 
-// ─── Märkte & ihre Flugblatt-Seiten ─────────────────────────────────────────
-// Region: Oberösterreich (Strasswalchen/Salzburg)
-// Jeder Markt hat eine eigene URL zur regionalen Flugblatt-Seite.
-// Puppeteer öffnet diese Seite, findet ALLE aktuellen PDF-Links
-// und lädt sie alle herunter. Gemini liest dann jede Seite einzeln.
-const MARKETS = [
-  {
-    storeId:   "spar",
-    storeName: "SPAR",
-    // SPAR OÖ – Hauptflugblatt + SPAR Premium + Monatssparer + Sonderfolder
-    url: "https://www.spar.at/aktionen/oberoesterreich",
-    note: "Mehrere Flugblätter: Hauptflugblatt, SPAR Premium, Monatssparer, Obst&Gemüse",
-  },
-  {
-    storeId:   "eurospar",
-    storeName: "EUROSPAR",
-    // EUROSPAR OÖ – eigene Flugblatt-Seite
-    url: "https://www.spar.at/aktionen/oberoesterreich/eurospar",
-    note: "EUROSPAR OÖ Flugblatt – oft ident mit SPAR",
-  },
-  {
-    storeId:   "maximarkt",
-    storeName: "Maximarkt",
-    // Maximarkt – eigene Website
-    url: "https://www.maximarkt.at/angebote/aktuelles_flugblatt",
-    note: "Maximarkt Angebote & Flugblätter",
-  },
-  {
-    storeId:   "hofer",
-    storeName: "Hofer",
-    // Hofer – Angebote-Seite (2 aktive Flugblätter gleichzeitig)
-    url: "https://www.hofer.at/de/angebote/aktuelle-flugblaetter-und-broschuren.html",
-    note: "Hofer hat oft 2 Flugblätter gleichzeitig (aktuell + ab nächste Woche)",
-  },
-  {
-    storeId:   "billa",
-    storeName: "BILLA",
-    // BILLA – zentrales Flugblatt (OÖ/Tirol Region)
-    url: "https://www.billa.at/unsere-aktionen/flugblatt",
-    note: "BILLA Flugblatt – hat regionale Versionen (OÖ/Tirol wird automatisch erkannt)",
-  },
-  {
-    storeId:   "billaplus",
-    storeName: "BILLA PLUS",
-    // BILLA PLUS – eigene Flugblatt-Seite (OÖ Region)
-    url: "https://www.billa.at/vorschau-billa-plus-flugblatt",
-    note: "BILLA PLUS OÖ – hat eigenes regionales Flugblatt",
-  },
-];
+// Deine Postleitzahl (Strasswalchen)
+const ZIP_CODE = "5204";
 
-// SPAR Gruppe – gleiche Aktionen
-const STORE_GROUPS = [
-  { ids: ["spar", "eurospar", "maximarkt"], name: "SPAR Gruppe" },
-];
+// marktguru.at API (inoffiziell, öffentlich zugänglich)
+const MG_API    = "https://api.marktguru.at/api/v1/offers/search";
+const MG_CLIENT = "WU/RH+PMGDi+gkZer3WbMelt6zcYHSTytNB7VpTia90=";
+const MG_KEY    = "8Kk+pmbf7TgJ9nVj2cXeA7P5zBGv8iuutVVMRfOfvNE=";
 
-// ─── Firebase Init ───────────────────────────────────────────────────────────
+// ─── Firebase initialisieren ─────────────────────────────────────────────────
 initializeApp({ credential: cert(FIREBASE_SERVICE), databaseURL: FIREBASE_DB_URL });
 const db = getDatabase();
 
-// ─── Hilfsfunktionen ─────────────────────────────────────────────────────────
-function getSearchStoreIds(storeId) {
-  if (!storeId) return null;
-  const group = STORE_GROUPS.find(g => g.ids.includes(storeId));
-  return group ? group.ids : [storeId];
-}
-
-function ensureDir(dir) {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-}
-
-function pdfToImages(pdfPath, outputDir) {
-  const name = path.basename(pdfPath, ".pdf").replace(/[^a-zA-Z0-9]/g, "_");
-  ensureDir(outputDir);
+// ─── Marktguru Suche ─────────────────────────────────────────────────────────
+async function searchMarktguru(query) {
+  const url = `${MG_API}?as=web&limit=10&offset=0&q=${encodeURIComponent(query)}&zipCode=${ZIP_CODE}`;
   try {
-    // Alle Seiten lesen – Skript läuft nachts, Zeit spielt keine Rolle
-    execSync(`pdftoppm -jpeg -r 120 "${pdfPath}" "${path.join(outputDir, name)}"`, { stdio: "pipe" });
-    return fs.readdirSync(outputDir)
-      .filter(f => f.startsWith(name) && f.endsWith(".jpg"))
-      .sort()
-      .map(f => path.join(outputDir, f));
-  } catch (e) {
-    console.error(`    ⚠️  PDF→Bilder Fehler: ${e.message}`);
-    return [];
-  }
-}
-
-function fileToBase64(filePath) {
-  return fs.readFileSync(filePath).toString("base64");
-}
-
-// ─── PDF-Links via Puppeteer finden ──────────────────────────────────────────
-async function findPdfLinks(browser, market) {
-  console.log(`\n  🌐 Öffne: ${market.url}`);
-  const page = await browser.newPage();
-  await page.setUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36");
-  
-  try {
-    await page.goto(market.url, { waitUntil: "networkidle2", timeout: 30000 });
-    // Kurz warten damit JavaScript geladen ist
-    await new Promise(r => setTimeout(r, 3000));
-
-    // Alle Links auf der Seite suchen
-    const allLinks = await page.evaluate(() => {
-      const links = [];
-      document.querySelectorAll("a").forEach(a => {
-        const href = a.href || "";
-        const text = a.textContent?.trim() || "";
-        if (href) links.push({ href, text });
-      });
-      return links;
-    });
-
-    // PDF-Links filtern
-    const pdfLinks = allLinks.filter(l => {
-      const href = l.href.toLowerCase();
-      const text = l.text.toLowerCase();
-      return href.includes(".pdf") || 
-             text.includes("pdf") || 
-             text.includes("herunterladen") ||
-             text.includes("download") ||
-             href.includes("download") ||
-             href.includes("getpdf") ||
-             href.includes("viewpdf");
-    });
-
-    // Nur Oberösterreich laden
-    const regional = pdfLinks.filter(l => {
-      const href = l.href.toLowerCase();
-      // Muss "oberoesterreich" im Pfad haben ODER kein Bundesland (z.B. sonderfolder)
-      const hasBundesland = ["burgenland","kaernten","niederoesterreich",
-        "oberoesterreich","steiermark","tirol","vorarlberg","wien",
-        "osttirol","salzburg"].some(r => href.includes(`/${r}/`));
-      if (hasBundesland) return href.includes("/oberoesterreich/");
-      return true; // kein Bundesland im Pfad → behalten
-    });
-
-    // Nur getPdf.ashx behalten (nicht ViewPdf.ashx – das ist dasselbe PDF)
-    const noDuplicates = regional.filter(l => {
-      const href = l.href.toLowerCase();
-      if (href.includes("viewpdf")) return false; // ViewPdf überspringen
-      return true;
-    });
-
-    // Nur aktuelle Flugblätter – alte Kataloge/Magazine überspringen
-    const currentYear = new Date().getFullYear();
-    const filtered = noDuplicates.filter(l => {
-      const href = l.href.toLowerCase();
-      // Hofer: nur "flipbook_kw" Links (aktuelle Flugblätter), keine alten Magazine
-      if (href.includes("scene7.com") || href.includes("aldi")) {
-        return href.includes("flipbook_kw");
-      }
-      // Andere Märkte: alte Jahre überspringen
-      if (href.includes("2022_") || href.includes("2023_") || href.includes("2024_")) return false;
-      return true;
-    });
-    const unique = [...new Map(filtered.map(l => [l.href, l])).values()];
-    console.log(`  📄 ${unique.length} relevante PDF-Link(s) gefunden (OÖ aktuell)`);
-    unique.forEach(l => console.log(`    → ${l.text.slice(0,50)} | ${l.href.slice(0,80)}`));
-    
-    await page.close();
-    return unique.map(l => l.href);
-  } catch (e) {
-    console.error(`  ⚠️  Seite konnte nicht geladen werden: ${e.message}`);
-    await page.close();
-    return [];
-  }
-}
-
-// ─── PDF herunterladen ────────────────────────────────────────────────────────
-async function downloadPdf(url, destPath) {
-  const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0" },
-    redirect: "follow",
-    timeout: 30000,
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const contentType = res.headers.get("content-type") || "";
-  if (!contentType.includes("pdf") && !url.toLowerCase().includes(".pdf")) {
-    throw new Error("Keine PDF-Datei");
-  }
-  const buffer = await res.arrayBuffer();
-  fs.writeFileSync(destPath, Buffer.from(buffer));
-  const kb = Math.round(buffer.byteLength / 1024);
-  console.log(`    ✅ Heruntergeladen (${kb} KB)`);
-  return destPath;
-}
-
-// ─── Gemini File API: PDF hochladen ──────────────────────────────────────────
-async function uploadPdfToGemini(pdfPath) {
-  const pdfBuffer = fs.readFileSync(pdfPath);
-  const kb = Math.round(pdfBuffer.byteLength / 1024);
-  console.log(`  📤 Upload zu Gemini (${kb} KB)...`);
-
-  // Start resumable upload
-  const startRes = await fetch(
-    `https://generativelanguage.googleapis.com/upload/v1beta/files?uploadType=resumable&key=${GEMINI_API_KEY}`,
-    {
-      method: "POST",
+    const res = await fetch(url, {
       headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Upload-Protocol": "resumable",
-        "X-Goog-Upload-Command": "start",
-        "X-Goog-Upload-Header-Content-Type": "application/pdf",
-        "X-Goog-Upload-Header-Content-Length": pdfBuffer.byteLength,
+        "x-clientkey": MG_CLIENT,
+        "x-apikey":    MG_KEY,
+        "User-Agent":  "Mozilla/5.0",
       },
-      body: JSON.stringify({ file: { display_name: path.basename(pdfPath) } }),
-    }
-  );
-  if (!startRes.ok) throw new Error(`Upload Start ${startRes.status}`);
-  const uploadUrl = startRes.headers.get("x-goog-upload-url");
-  if (!uploadUrl) throw new Error("Kein Upload-URL erhalten");
-
-  // Upload file bytes
-  const uploadRes = await fetch(uploadUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/pdf",
-      "X-Goog-Upload-Command": "upload, finalize",
-      "X-Goog-Upload-Offset": "0",
-    },
-    body: pdfBuffer,
-  });
-  if (!uploadRes.ok) throw new Error(`Upload ${uploadRes.status}`);
-  const fileData = await uploadRes.json();
-  const fileUri = fileData.file?.uri;
-  if (!fileUri) throw new Error("Kein file URI");
-  console.log(`  ✅ Upload OK → ${fileUri.slice(0, 60)}...`);
-  return fileUri;
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return data.results || [];
+  } catch (e) {
+    console.error(`  ⚠️  Suche fehlgeschlagen für "${query}": ${e.message}`);
+    return [];
+  }
 }
 
-// ─── Gemini: Ganzes PDF über File API analysieren ────────────────────────────
-async function analyzePdfWithGemini(pdfPath, articles, storeName, retries = 3) {
-  const articleList = articles.map(a => `- ${a.name}`).join("\n");
-  const prompt = `Das ist das aktuelle Flugblatt von ${storeName} Österreich.
-
-Durchsuche das gesamte Flugblatt nach Aktionen für DIESE Artikel (nur diese):
-${articleList}
-
-Antworte NUR mit validem JSON ohne Markdown:
-{"found":true,"deals":[{"articleName":"Name aus Liste","title":"Produktname im Flugblatt","price":"1,99 EUR","savings":"-20% oder -1,50 EUR","validUntil":"22.04."}]}
-Wenn nichts gefunden: {"found":false,"deals":[]}
-Nur echte Angebote die du im Flugblatt siehst!`;
-
-  let fileUri;
-  try {
-    fileUri = await uploadPdfToGemini(pdfPath);
-  } catch(e) {
-    console.error(`  ⚠️ Upload fehlgeschlagen: ${e.message}`);
-    return { found: false, deals: [] };
-  }
-
-  // Länger warten bis Datei verarbeitet ist (Gemini braucht Zeit)
-  await sleep(15000);
-
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { file_data: { mime_type: "application/pdf", file_uri: fileUri } },
-                { text: prompt }
-              ]
-            }],
-            generationConfig: { responseMimeType: "text/plain" },
-          }),
-        }
-      );
-
-      if (res.status === 429) {
-        const waitSec = attempt * 90; // 90s, 180s, 270s
-        console.error(`    ⏳ Rate Limit (429) – warte ${waitSec}s... (Versuch ${attempt}/${retries})`);
-        await sleep(waitSec * 1000);
-        continue;
-      }
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Gemini ${res.status}: ${errText.slice(0,100)}`);
-      }
-
-      const data = await res.json();
-      const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text||"").join("");
-      const match = text.match(/\{[\s\S]*\}/);
-      return match ? JSON.parse(match[0]) : { found: false, deals: [] };
-
-    } catch (e) {
-      if (attempt === retries) {
-        console.error(`    ⚠️  Gemini Fehler: ${e.message}`);
-        return { found: false, deals: [] };
-      }
-      await sleep(20000);
-    }
-  }
-  return { found: false, deals: [] };
+// ─── Markt-Namen normalisieren ───────────────────────────────────────────────
+function normalizeStore(advertiserName) {
+  const n = (advertiserName || "").toLowerCase();
+  if (n.includes("spar") && n.includes("interspar")) return "interspar";
+  if (n.includes("eurospar"))  return "eurospar";
+  if (n.includes("spar"))      return "spar";
+  if (n.includes("hofer") || n.includes("aldi")) return "hofer";
+  if (n.includes("billa plus") || n.includes("billa+")) return "billaplus";
+  if (n.includes("billa"))     return "billa";
+  if (n.includes("maximarkt")) return "maximarkt";
+  if (n.includes("lidl"))      return "lidl";
+  if (n.includes("penny"))     return "penny";
+  return advertiserName;
 }
 
-async function analyzePageWithGemini(imageBase64, articles, storeName, retries = 3) {
-  const articleList = articles.map(a => `- ${a.name}`).join("\n");
-  const prompt = `Das ist eine Seite aus dem aktuellen Flugblatt von ${storeName} Österreich.
-
-Suche nach Aktionen für DIESE Artikel (nur diese, nichts anderes):
-${articleList}
-
-Antworte NUR mit JSON:
-{"found":true,"deals":[{"articleName":"Name aus Liste","title":"Produktname im Flugblatt","price":"1,99 EUR","savings":"-20% oder -1,50 EUR","validUntil":"22.04."}]}
-Wenn nichts gefunden: {"found":false,"deals":[]}
-Nur echte Angebote die du auf dieser Seite siehst!`;
-
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { inline_data: { mime_type: "image/jpeg", data: imageBase64 } },
-                { text: prompt }
-              ]
-            }],
-            generationConfig: { responseMimeType: "text/plain" },
-          }),
-        }
-      );
-
-      // 429 = Rate Limit → warten und nochmal versuchen
-      if (res.status === 429) {
-        const waitSec = attempt * 30; // 30s, 60s, 90s
-        console.error(`    ⏳ Rate Limit (429) – warte ${waitSec}s... (Versuch ${attempt}/${retries})`);
-        await sleep(waitSec * 1000);
-        continue;
-      }
-
-      if (!res.ok) throw new Error(`Gemini ${res.status}`);
-      const data = await res.json();
-      const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text||"").join("");
-      const match = text.match(/\{[\s\S]*\}/);
-      return match ? JSON.parse(match[0]) : { found: false, deals: [] };
-
-    } catch (e) {
-      if (attempt === retries) {
-        console.error(`    ⚠️  Gemini Fehler nach ${retries} Versuchen: ${e.message}`);
-        return { found: false, deals: [] };
-      }
-      await sleep(15000); // 15s Pause bei anderen Fehlern
-    }
-  }
-  return { found: false, deals: [] };
-}
-
-// ─── Hauptprogramm ────────────────────────────────────────────────────────────
+// ─── Hauptprogramm ──────────────────────────────────────────────────────────
 async function main() {
   console.log("═══════════════════════════════════════════════════");
-  console.log("🛒 FamilyCart – Vollautomatischer Flugblatt-Check");
+  console.log("🛒 My Wagerl – Aktions-Check via marktguru.at");
   console.log(`📅 ${new Date().toLocaleString("de-AT")}`);
+  console.log(`📍 PLZ: ${ZIP_CODE}`);
   console.log("═══════════════════════════════════════════════════\n");
 
-  ensureDir(TMP_DIR);
+  // 1. Artikel aus Firebase laden
+  const [itemsSnap, templateSnap] = await Promise.all([
+    db.ref("items").get(),
+    db.ref("template").get(),
+  ]);
 
-  // 1. Märkte aus Firebase laden (falls angepasst)
-  const storesSnap = await db.ref("stores").get();
-  const fbStores   = Object.values(storesSnap.val() || {});
+  const allItems = [
+    ...Object.values(itemsSnap.val()    || {}),
+    ...Object.values(templateSnap.val() || {}),
+  ];
 
-  // 2. Artikel aus Firebase laden
-  // App speichert Artikel unter "items" (Einkaufsliste) und "template" (Zu besorgen)
-  const itemsSnap    = await db.ref("items").get();
-  const templateSnap = await db.ref("template").get();
-
-  const itemsRaw    = itemsSnap.val()    || {};
-  const templateRaw = templateSnap.val() || {};
-
-  // Alle einzigartigen Artikel aus beiden Listen kombinieren
-  const allItemsMap = new Map();
-  [...Object.entries(itemsRaw), ...Object.entries(templateRaw)].forEach(([key, val]) => {
-    if (val.name && !allItemsMap.has(val.name.toLowerCase())) {
-      allItemsMap.set(val.name.toLowerCase(), { ...val, fbKey: key });
-    }
-  });
-  const articles = Array.from(allItemsMap.values());
+  // Einzigartige Artikelnamen
+  const seen    = new Set();
+  const articles = allItems
+    .filter(i => i.name && !seen.has(i.name.toLowerCase()) && seen.add(i.name.toLowerCase()))
+    .map(i => ({ name: i.name, storeId: i.storeId || "" }));
 
   if (articles.length === 0) {
-    console.log("⚠️  Keine Artikel gefunden (weder in Liste noch in Zu besorgen).");
-    console.log("   → Füge zuerst Artikel in der App hinzu!");
+    console.log("⚠️  Keine Artikel in Firebase gefunden. Bitte erst Artikel in der App anlegen!");
     process.exit(0);
   }
-  console.log(`📦 ${articles.length} einzigartige Artikel geladen:`);
-  articles.forEach(a => console.log(`   - ${a.name} ${a.storeId ? "("+a.storeId+")" : "(alle Märkte)"}`));
+
+  console.log(`📦 ${articles.length} Artikel werden gesucht:`);
+  articles.forEach(a => console.log(`   - ${a.name}`));
   console.log("");
 
-  // 3. Alte Deals löschen
-  await db.ref("deals").remove();
-
-  // 4. Puppeteer starten
-  console.log("🚀 Browser wird gestartet...\n");
-  const browser = await puppeteer.launch({
-    headless: "new",
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
-  });
-
-  const allDeals  = [];
+  // 2. Jeden Artikel auf marktguru suchen
+  const allDeals = [];
   const checkedAt = new Date().toISOString();
-  const processedUrls = new Set(); // Duplikate vermeiden
 
-  // 5. Für jeden Markt
-  for (const market of MARKETS) {
-    console.log(`\n${"═".repeat(50)}`);
-    console.log(`🏪 ${market.storeName}`);
-    console.log("═".repeat(50));
+  for (const article of articles) {
+    console.log(`🔍 Suche: "${article.name}"`);
+    const results = await searchMarktguru(article.name);
 
-    // Relevante Artikel für diesen Markt
-    const relevantArticles = articles.filter(a => {
-      if (!a.storeId) return true;
-      const searchIds = getSearchStoreIds(a.storeId);
-      return searchIds ? searchIds.includes(market.storeId) : false;
-    });
+    if (results.length === 0) {
+      console.log(`   📭 Keine Aktionen gefunden\n`);
+    } else {
+      console.log(`   ✅ ${results.length} Angebot(e) gefunden:`);
 
-    if (relevantArticles.length === 0) {
-      console.log("  ─ Keine Artikel für diesen Markt");
-      continue;
-    }
-    console.log(`  📋 ${relevantArticles.length} relevante Artikel:`, relevantArticles.map(a=>a.name).join(", "));
+      for (const offer of results) {
+        const storeName  = offer.advertisers?.[0]?.name || "Unbekannt";
+        const storeId    = normalizeStore(storeName);
+        const price      = offer.price ? `${offer.price} EUR` : null;
+        const oldPrice   = offer.oldPrice ? `${offer.oldPrice} EUR` : null;
+        const savings    = (offer.price && offer.oldPrice)
+          ? `-${(offer.oldPrice - offer.price).toFixed(2)} EUR`
+          : null;
+        const validFrom  = offer.validityDates?.[0]?.from?.slice(0,10) || null;
+        const validUntil = offer.validityDates?.[0]?.to?.slice(0,10)   || null;
 
-    // PDF-Links finden
-    const pdfLinks = await findPdfLinks(browser, market);
-    if (pdfLinks.length === 0) {
-      console.log("  📭 Keine PDFs gefunden");
-      continue;
-    }
+        console.log(`      🏪 ${storeName}: ${offer.description || offer.name} – ${price || "?"}`);
 
-    // Jeden PDF-Link verarbeiten
-    for (let pi = 0; pi < pdfLinks.length; pi++) {
-      const pdfUrl = pdfLinks[pi];
-      if (processedUrls.has(pdfUrl)) { console.log(`  ⏭️  Bereits verarbeitet`); continue; }
-      processedUrls.add(pdfUrl);
-
-      console.log(`\n  📥 PDF ${pi+1}/${pdfLinks.length}: ${pdfUrl.slice(0,70)}...`);
-      
-      const pdfName = `${market.storeId}_${pi+1}_${Date.now()}.pdf`;
-      const pdfPath = path.join(TMP_DIR, pdfName);
-      const imgDir  = path.join(TMP_DIR, `img_${market.storeId}_${pi}`);
-
-      try {
-        await downloadPdf(pdfUrl, pdfPath);
-      } catch (e) {
-        console.error(`  ❌ Download fehlgeschlagen: ${e.message}`);
-        continue;
-      }
-
-      // Ganzes PDF über Gemini File API analysieren
-      console.log(`  🤖 Analysiere ganzes PDF mit Gemini...`);
-      const result = await analyzePdfWithGemini(pdfPath, relevantArticles, market.storeName);
-
-      let dealsThisPdf = 0;
-      if (result.found && result.deals?.length > 0) {
-        result.deals.forEach(deal => {
-          allDeals.push({
-            articleName: deal.articleName,
-            articleId:   articles.find(a => a.name.toLowerCase()===deal.articleName?.toLowerCase())?.fbKey||"",
-            storeId:     market.storeId,
-            storeName:   market.storeName,
-            title:       deal.title || deal.articleName,
-            price:       deal.price || null,
-            savings:     deal.savings || null,
-            validUntil:  deal.validUntil || null,
-            source:      pdfUrl,
-            checkedAt,
-          });
+        allDeals.push({
+          articleName: article.name,
+          storeId,
+          storeName,
+          title:       offer.description || offer.name || article.name,
+          price,
+          oldPrice,
+          savings,
+          validFrom,
+          validUntil,
+          source:      "marktguru.at",
+          checkedAt,
         });
-        dealsThisPdf = result.deals.length;
-        console.log(`  ✅ ${dealsThisPdf} Deal(s): ${result.deals.map(d=>d.articleName).join(", ")}`);
-      } else {
-        console.log(`  📊 0 Deals in diesem PDF`);
       }
-
-      // PDF löschen + 60 Sek. Pause zwischen PDFs (Gemini Rate Limit)
-      try { fs.unlinkSync(pdfPath); } catch {}
-      console.log(`  ⏳ Warte 60s vor nächstem PDF...`);
-      await sleep(60000);
+      console.log("");
     }
+
+    // Kurze Pause zwischen Anfragen
+    await sleep(500);
   }
 
-  await browser.close();
-  console.log("\n🔒 Browser geschlossen");
-
-  // 6. Duplikate entfernen & speichern
-  const seen    = new Set();
-  const unique  = allDeals.filter(d => {
-    const key = `${d.articleName}_${d.storeId}`;
-    if (seen.has(key)) return false;
-    seen.add(key); return true;
+  // 3. Duplikate entfernen (gleicher Artikel + gleicher Markt)
+  const seenDeals = new Set();
+  const uniqueDeals = allDeals.filter(d => {
+    const key = `${d.articleName}_${d.storeId}_${d.validUntil}`;
+    if (seenDeals.has(key)) return false;
+    seenDeals.add(key);
+    return true;
   });
 
-  if (unique.length > 0) {
+  // 4. In Firebase speichern
+  if (uniqueDeals.length > 0) {
     const dealsObj = {};
-    unique.forEach((d, i) => { dealsObj[`deal_${Date.now()}_${i}`] = d; });
-    await db.ref("deals").set(dealsObj);
-    console.log(`\n💾 ${unique.length} Deals gespeichert`);
-  }
-
-  // 7. Meta + Benachrichtigung
-  await db.ref("dealMeta").set({
-    lastCheck:       checkedAt,
-    dealsFound:      unique.length,
-    articlesChecked: articles.length,
-    marketsChecked:  MARKETS.length,
-    status:          "OK",
-    nextCheck:       new Date().getDay() < 4 ? "Donnerstag 07:00" : "Montag 07:00",
-  });
-
-  if (unique.length > 0) {
-    const top = unique.slice(0,3).map(d=>`${d.articleName} bei ${d.storeName}`).join(", ");
-    await db.ref("notifications").push({
-      msg:  `🔥 ${unique.length} Aktionen gefunden! ${top}`,
-      to:   "all", from:"system", id:Date.now(),
-      time: new Date().toLocaleTimeString("de-AT",{hour:"2-digit",minute:"2-digit"}),
-      type: "deals",
+    uniqueDeals.forEach((d, i) => {
+      dealsObj[`deal_${Date.now()}_${i}`] = d;
     });
-  }
 
-  // Aufräumen
-  try { fs.rmSync(TMP_DIR, { recursive:true, force:true }); } catch {}
+    // Alte Deals löschen + neue speichern
+    await db.ref("deals").set(dealsObj);
+    console.log(`\n💾 ${uniqueDeals.length} Deals in Firebase gespeichert!`);
+
+    // 5. Benachrichtigung
+    const top = uniqueDeals.slice(0,3).map(d => `${d.articleName} bei ${d.storeName}`).join(", ");
+    await db.ref("notifications").push({
+      msg:  `🔥 ${uniqueDeals.length} Aktionen gefunden! ${top}`,
+      from: "system",
+      to:   "all",
+      id:   Date.now(),
+      time: new Date().toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" }),
+    });
+  } else {
+    await db.ref("deals").set(null);
+    console.log("\n📭 Keine aktuellen Aktionen für deine Artikel gefunden.");
+  }
 
   console.log("\n═══════════════════════════════════════════════════");
-  console.log(`✅ Fertig! ${unique.length} Deals aus ${processedUrls.size} Flugblättern`);
+  console.log(`✅ Fertig! ${uniqueDeals.length} Deals aus marktguru.at`);
   console.log("═══════════════════════════════════════════════════");
 }
 
-main().catch(e => { console.error("❌ Fehler:", e); process.exit(1); });
+main().catch(e => {
+  console.error("❌ Fehler:", e.message);
+  process.exit(1);
+});
