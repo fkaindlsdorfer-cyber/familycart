@@ -1,12 +1,14 @@
 {
-  "name": "familycart-deal-checker",
+  "name": "mywagerl-check-deals",
   "version": "3.0.0",
-  "description": "Automatischer Flugblatt-Check für FamilyCart",
   "type": "module",
+  "description": "Aktions-Check via marktguru.at",
   "main": "check-deals.js",
+  "scripts": {
+    "start": "node check-deals.js"
+  },
   "dependencies": {
     "firebase-admin": "^12.0.0",
-    "node-fetch": "^3.3.2",
-    "puppeteer": "^22.0.0"
+    "node-fetch": "^3.3.2"
   }
 }
