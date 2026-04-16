@@ -167,9 +167,20 @@ async function findPdfLinks(browser, market) {
       return true;
     });
 
-    // Duplikate nach URL entfernen
-    const unique = [...new Map(noDuplicates.map(l => [l.href, l])).values()];
-    console.log(`  📄 ${unique.length} relevante PDF-Link(s) gefunden (OÖ/Salzburg)`);
+    // Nur aktuelle Flugblätter – alte Kataloge/Magazine überspringen
+    const currentYear = new Date().getFullYear();
+    const filtered = noDuplicates.filter(l => {
+      const href = l.href.toLowerCase();
+      // Hofer: nur "flipbook_kw" Links (aktuelle Flugblätter), keine alten Magazine
+      if (href.includes("scene7.com") || href.includes("aldi")) {
+        return href.includes("flipbook_kw");
+      }
+      // Andere Märkte: alte Jahre überspringen
+      if (href.includes("2022_") || href.includes("2023_") || href.includes("2024_")) return false;
+      return true;
+    });
+    const unique = [...new Map(filtered.map(l => [l.href, l])).values()];
+    console.log(`  📄 ${unique.length} relevante PDF-Link(s) gefunden (OÖ aktuell)`);
     unique.forEach(l => console.log(`    → ${l.text.slice(0,50)} | ${l.href.slice(0,80)}`));
     
     await page.close();
@@ -200,8 +211,51 @@ async function downloadPdf(url, destPath) {
   return destPath;
 }
 
-// ─── Gemini: Ganzes PDF auf einmal analysieren ───────────────────────────────
-async function analyzePdfWithGemini(pdfBase64, articles, storeName, retries = 3) {
+// ─── Gemini File API: PDF hochladen ──────────────────────────────────────────
+async function uploadPdfToGemini(pdfPath) {
+  const pdfBuffer = fs.readFileSync(pdfPath);
+  const kb = Math.round(pdfBuffer.byteLength / 1024);
+  console.log(`  📤 Upload zu Gemini (${kb} KB)...`);
+
+  // Start resumable upload
+  const startRes = await fetch(
+    `https://generativelanguage.googleapis.com/upload/v1beta/files?uploadType=resumable&key=${GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Upload-Protocol": "resumable",
+        "X-Goog-Upload-Command": "start",
+        "X-Goog-Upload-Header-Content-Type": "application/pdf",
+        "X-Goog-Upload-Header-Content-Length": pdfBuffer.byteLength,
+      },
+      body: JSON.stringify({ file: { display_name: path.basename(pdfPath) } }),
+    }
+  );
+  if (!startRes.ok) throw new Error(`Upload Start ${startRes.status}`);
+  const uploadUrl = startRes.headers.get("x-goog-upload-url");
+  if (!uploadUrl) throw new Error("Kein Upload-URL erhalten");
+
+  // Upload file bytes
+  const uploadRes = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/pdf",
+      "X-Goog-Upload-Command": "upload, finalize",
+      "X-Goog-Upload-Offset": "0",
+    },
+    body: pdfBuffer,
+  });
+  if (!uploadRes.ok) throw new Error(`Upload ${uploadRes.status}`);
+  const fileData = await uploadRes.json();
+  const fileUri = fileData.file?.uri;
+  if (!fileUri) throw new Error("Kein file URI");
+  console.log(`  ✅ Upload OK → ${fileUri.slice(0, 60)}...`);
+  return fileUri;
+}
+
+// ─── Gemini: Ganzes PDF über File API analysieren ────────────────────────────
+async function analyzePdfWithGemini(pdfPath, articles, storeName, retries = 3) {
   const articleList = articles.map(a => `- ${a.name}`).join("\n");
   const prompt = `Das ist das aktuelle Flugblatt von ${storeName} Österreich.
 
@@ -213,6 +267,17 @@ Antworte NUR mit validem JSON ohne Markdown:
 Wenn nichts gefunden: {"found":false,"deals":[]}
 Nur echte Angebote die du im Flugblatt siehst!`;
 
+  let fileUri;
+  try {
+    fileUri = await uploadPdfToGemini(pdfPath);
+  } catch(e) {
+    console.error(`  ⚠️ Upload fehlgeschlagen: ${e.message}`);
+    return { found: false, deals: [] };
+  }
+
+  // Kurz warten bis Datei verarbeitet ist
+  await sleep(3000);
+
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const res = await fetch(
@@ -223,7 +288,7 @@ Nur echte Angebote die du im Flugblatt siehst!`;
           body: JSON.stringify({
             contents: [{
               parts: [
-                { inline_data: { mime_type: "application/pdf", data: pdfBase64 } },
+                { file_data: { mime_type: "application/pdf", file_uri: fileUri } },
                 { text: prompt }
               ]
             }],
@@ -238,7 +303,10 @@ Nur echte Angebote die du im Flugblatt siehst!`;
         await sleep(waitSec * 1000);
         continue;
       }
-      if (!res.ok) throw new Error(`Gemini ${res.status}`);
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Gemini ${res.status}: ${errText.slice(0,100)}`);
+      }
 
       const data = await res.json();
       const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text||"").join("");
@@ -250,14 +318,11 @@ Nur echte Angebote die du im Flugblatt siehst!`;
         console.error(`    ⚠️  Gemini Fehler: ${e.message}`);
         return { found: false, deals: [] };
       }
-      await sleep(30000);
+      await sleep(20000);
     }
   }
   return { found: false, deals: [] };
 }
-
-// ─── Gemini: Einzelne Seite analysieren (Fallback) ───────────────────────────
-const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 async function analyzePageWithGemini(imageBase64, articles, storeName, retries = 3) {
   const articleList = articles.map(a => `- ${a.name}`).join("\n");
@@ -413,10 +478,9 @@ async function main() {
         continue;
       }
 
-      // Ganzes PDF in EINER Gemini-Anfrage analysieren (spart 95% der API-Calls)
+      // Ganzes PDF über Gemini File API analysieren
       console.log(`  🤖 Analysiere ganzes PDF mit Gemini...`);
-      const pdfBase64 = fileToBase64(pdfPath);
-      const result = await analyzePdfWithGemini(pdfBase64, relevantArticles, market.storeName);
+      const result = await analyzePdfWithGemini(pdfPath, relevantArticles, market.storeName);
 
       let dealsThisPdf = 0;
       if (result.found && result.deals?.length > 0) {
