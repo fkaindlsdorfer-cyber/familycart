@@ -144,12 +144,32 @@ async function findPdfLinks(browser, market) {
              text.includes("pdf") || 
              text.includes("herunterladen") ||
              text.includes("download") ||
-             href.includes("download");
+             href.includes("download") ||
+             href.includes("getpdf") ||
+             href.includes("viewpdf");
     });
 
-    // Duplikate entfernen
-    const unique = [...new Map(pdfLinks.map(l => [l.href, l])).values()];
-    console.log(`  📄 ${unique.length} PDF-Link(s) gefunden`);
+    // Nur Oberösterreich laden
+    const regional = pdfLinks.filter(l => {
+      const href = l.href.toLowerCase();
+      // Muss "oberoesterreich" im Pfad haben ODER kein Bundesland (z.B. sonderfolder)
+      const hasBundesland = ["burgenland","kaernten","niederoesterreich",
+        "oberoesterreich","steiermark","tirol","vorarlberg","wien",
+        "osttirol","salzburg"].some(r => href.includes(`/${r}/`));
+      if (hasBundesland) return href.includes("/oberoesterreich/");
+      return true; // kein Bundesland im Pfad → behalten
+    });
+
+    // Nur getPdf.ashx behalten (nicht ViewPdf.ashx – das ist dasselbe PDF)
+    const noDuplicates = regional.filter(l => {
+      const href = l.href.toLowerCase();
+      if (href.includes("viewpdf")) return false; // ViewPdf überspringen
+      return true;
+    });
+
+    // Duplikate nach URL entfernen
+    const unique = [...new Map(noDuplicates.map(l => [l.href, l])).values()];
+    console.log(`  📄 ${unique.length} relevante PDF-Link(s) gefunden (OÖ/Salzburg)`);
     unique.forEach(l => console.log(`    → ${l.text.slice(0,50)} | ${l.href.slice(0,80)}`));
     
     await page.close();
@@ -370,8 +390,8 @@ async function main() {
           console.log("─");
         }
 
-        // 4 Sek. Pause → max 15 Anfragen/Minute (Gemini Free Limit)
-        await sleep(4000);
+        // 5 Sek. Pause → sicher unter 12 Anfragen/Minute (Limit: 15)
+        await sleep(5000);
         // Bild löschen um Speicher zu sparen
         try { fs.unlinkSync(images[i]); } catch {}
       }
