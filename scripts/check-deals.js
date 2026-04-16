@@ -200,7 +200,63 @@ async function downloadPdf(url, destPath) {
   return destPath;
 }
 
-// ─── Gemini: Seite analysieren mit Retry ──────────────────────────────────────
+// ─── Gemini: Ganzes PDF auf einmal analysieren ───────────────────────────────
+async function analyzePdfWithGemini(pdfBase64, articles, storeName, retries = 3) {
+  const articleList = articles.map(a => `- ${a.name}`).join("\n");
+  const prompt = `Das ist das aktuelle Flugblatt von ${storeName} Österreich.
+
+Durchsuche das gesamte Flugblatt nach Aktionen für DIESE Artikel (nur diese):
+${articleList}
+
+Antworte NUR mit validem JSON ohne Markdown:
+{"found":true,"deals":[{"articleName":"Name aus Liste","title":"Produktname im Flugblatt","price":"1,99 EUR","savings":"-20% oder -1,50 EUR","validUntil":"22.04."}]}
+Wenn nichts gefunden: {"found":false,"deals":[]}
+Nur echte Angebote die du im Flugblatt siehst!`;
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { inline_data: { mime_type: "application/pdf", data: pdfBase64 } },
+                { text: prompt }
+              ]
+            }],
+            generationConfig: { responseMimeType: "text/plain" },
+          }),
+        }
+      );
+
+      if (res.status === 429) {
+        const waitSec = attempt * 60;
+        console.error(`    ⏳ Rate Limit (429) – warte ${waitSec}s... (Versuch ${attempt}/${retries})`);
+        await sleep(waitSec * 1000);
+        continue;
+      }
+      if (!res.ok) throw new Error(`Gemini ${res.status}`);
+
+      const data = await res.json();
+      const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text||"").join("");
+      const match = text.match(/\{[\s\S]*\}/);
+      return match ? JSON.parse(match[0]) : { found: false, deals: [] };
+
+    } catch (e) {
+      if (attempt === retries) {
+        console.error(`    ⚠️  Gemini Fehler: ${e.message}`);
+        return { found: false, deals: [] };
+      }
+      await sleep(30000);
+    }
+  }
+  return { found: false, deals: [] };
+}
+
+// ─── Gemini: Einzelne Seite analysieren (Fallback) ───────────────────────────
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 async function analyzePageWithGemini(imageBase64, articles, storeName, retries = 3) {
@@ -357,49 +413,36 @@ async function main() {
         continue;
       }
 
-      // PDF zu Bilder
-      const images = pdfToImages(pdfPath, imgDir);
-      if (images.length === 0) { console.error("  ❌ Keine Bilder erzeugt"); continue; }
-      console.log(`  🖼️  ${images.length} Seite(n) werden analysiert...`);
+      // Ganzes PDF in EINER Gemini-Anfrage analysieren (spart 95% der API-Calls)
+      console.log(`  🤖 Analysiere ganzes PDF mit Gemini...`);
+      const pdfBase64 = fileToBase64(pdfPath);
+      const result = await analyzePdfWithGemini(pdfBase64, relevantArticles, market.storeName);
 
-      // Jede Seite analysieren
       let dealsThisPdf = 0;
-      for (let i = 0; i < images.length; i++) {
-        process.stdout.write(`  📄 Seite ${i+1}/${images.length}... `);
-        const base64 = fileToBase64(images[i]);
-        const result = await analyzePageWithGemini(base64, relevantArticles, market.storeName);
-
-        if (result.found && result.deals?.length > 0) {
-          result.deals.forEach(deal => {
-            allDeals.push({
-              articleName: deal.articleName,
-              articleId:   articles.find(a => a.name.toLowerCase()===deal.articleName?.toLowerCase())?.fbKey||"",
-              storeId:     market.storeId,
-              storeName:   market.storeName,
-              title:       deal.title || deal.articleName,
-              price:       deal.price || null,
-              savings:     deal.savings || null,
-              validUntil:  deal.validUntil || null,
-              source:      pdfUrl,
-              checkedAt,
-            });
+      if (result.found && result.deals?.length > 0) {
+        result.deals.forEach(deal => {
+          allDeals.push({
+            articleName: deal.articleName,
+            articleId:   articles.find(a => a.name.toLowerCase()===deal.articleName?.toLowerCase())?.fbKey||"",
+            storeId:     market.storeId,
+            storeName:   market.storeName,
+            title:       deal.title || deal.articleName,
+            price:       deal.price || null,
+            savings:     deal.savings || null,
+            validUntil:  deal.validUntil || null,
+            source:      pdfUrl,
+            checkedAt,
           });
-          dealsThisPdf += result.deals.length;
-          console.log(`✅ ${result.deals.length} Deal(s): ${result.deals.map(d=>d.articleName).join(", ")}`);
-        } else {
-          console.log("─");
-        }
-
-        // 5 Sek. Pause → sicher unter 12 Anfragen/Minute (Limit: 15)
-        await sleep(5000);
-        // Bild löschen um Speicher zu sparen
-        try { fs.unlinkSync(images[i]); } catch {}
+        });
+        dealsThisPdf = result.deals.length;
+        console.log(`  ✅ ${dealsThisPdf} Deal(s): ${result.deals.map(d=>d.articleName).join(", ")}`);
+      } else {
+        console.log(`  📊 0 Deals in diesem PDF`);
       }
 
-      console.log(`  📊 ${dealsThisPdf} Deals in diesem PDF`);
-      // PDF löschen
+      // PDF löschen + 10 Sek. Pause zwischen PDFs
       try { fs.unlinkSync(pdfPath); } catch {}
-      try { fs.rmdirSync(imgDir); } catch {}
+      await sleep(10000);
     }
   }
 
