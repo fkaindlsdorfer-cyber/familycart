@@ -1,14 +1,9 @@
 {
   "name": "mywagerl-check-deals",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "type": "module",
-  "description": "Aktions-Check via marktguru.at",
-  "main": "check-deals.js",
-  "scripts": {
-    "start": "node check-deals.js"
-  },
   "dependencies": {
     "firebase-admin": "^12.0.0",
-    "node-fetch": "^3.3.2"
+    "marktguru.at": "^0.0.5"
   }
 }
