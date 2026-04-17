@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="My Wagerl">
+<title>My Wagerl 🛒</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/firebase@10.12.0/firebase-app-compat.js"></script>
+<script src="https://unpkg.com/firebase@10.12.0/firebase-database-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'DM Sans',sans-serif;background:#FAFAF7;max-width:430px;margin:0 auto;min-height:100vh;overflow-x:hidden;}
+input,select,textarea,button{font-family:'DM Sans',sans-serif;}
+.tap{cursor:pointer;transition:transform .12s,opacity .12s;}
+.tap:active{transform:scale(0.94);opacity:0.72;}
+@keyframes slideUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes expandIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:.25}50%{opacity:.65}}
+@keyframes floatA{0%,100%{transform:translateY(0) rotate(-12deg)}50%{transform:translateY(-10px) rotate(-12deg)}}
+@keyframes floatB{0%,100%{transform:translateY(0) rotate(10deg)}50%{transform:translateY(-8px) rotate(10deg)}}
+@keyframes floatC{0%,100%{transform:translateY(0) rotate(6deg)}50%{transform:translateY(-12px) rotate(6deg)}}
+@keyframes floatD{0%,100%{transform:translateY(0) rotate(-6deg)}50%{transform:translateY(-9px) rotate(-6deg)}}
+.fa{animation:floatA 3.5s ease-in-out infinite;}
+.fb{animation:floatB 4s ease-in-out infinite;}
+.fc{animation:floatC 3.8s ease-in-out infinite;}
+.fd{animation:floatD 4.2s ease-in-out infinite;}
+.inp{width:100%;padding:12px 14px;border:1.5px solid #E5E7EB;border-radius:13px;font-size:14px;outline:none;color:#111827;background:#FAFAFA;display:block;margin-bottom:10px;}
+.inp:focus{border-color:#1C2B1A;}
+.btn-dark{width:100%;padding:14px;background:#1C2B1A;color:white;border:none;border-radius:13px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px;}
+.btn-light{width:100%;padding:14px;background:#F3F4F6;color:#6B7280;border:none;border-radius:13px;font-size:15px;cursor:pointer;}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:50;display:flex;align-items:flex-end;}
+.modal-box{background:white;border-radius:22px 22px 0 0;padding:6px 18px 40px;width:100%;max-width:430px;margin:0 auto;max-height:92vh;overflow-y:auto;animation:slideUp .22s ease;}
+.modal-handle{width:36px;height:4px;background:#E5E7EB;border-radius:2px;margin:13px auto 16px;}
+.tab-btn{flex:1;padding:9px 2px 7px;border:none;background:none;cursor:pointer;font-size:10px;font-weight:400;color:#94a3b8;border-bottom:2.5px solid transparent;font-family:'DM Sans',sans-serif;position:relative;}
+.tab-btn.active{color:#1C2B1A;border-bottom:2.5px solid #1C2B1A;font-weight:700;}
+.deal-badge{display:inline-flex;align-items:center;gap:3px;font-size:9px;padding:2px 6px;border-radius:5px;background:#FEF3C7;color:#D97706;font-weight:700;margin-left:4px;}
+
+/* ── SHOPPING MODE ── */
+#shopMode{display:none;position:fixed;inset:0;background:#111827;z-index:100;overflow-y:auto;padding-bottom:120px;}
+#shopMode.active{display:block;}
+.shop-item{background:#1F2937;border-radius:20px;padding:20px;margin:0 14px 12px;display:flex;align-items:center;gap:16px;transition:opacity .2s;}
+.shop-item.bought{opacity:.45;}
+.shop-check{width:52px;height:52px;border-radius:14px;flex-shrink:0;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s;}
+.shop-check.open{background:#374151;box-shadow:inset 0 0 0 2.5px #4B5563;}
+.shop-check.done{background:#16A34A;}
+.shop-store-header{display:flex;align-items:center;gap:10px;margin:18px 14px 8px;padding:10px 14px;border-radius:13px;}
+</style>
+</head>
+<body>
+
+<!-- ═══ SETUP ═══════════════════════════════════════════════════════════════ -->
+<div id="setupScreen" style="display:none;position:fixed;inset:0;background:white;z-index:200;overflow-y:auto;padding:28px 20px 50px;">
+  <div style="text-align:center;margin-bottom:24px;">
+    <div style="font-size:48px;margin-bottom:8px;">⚙️</div>
+    <h2 style="font-family:'Playfair Display',serif;font-size:22px;color:#111827;margin-bottom:6px;">Einrichtung</h2>
+    <p style="color:#6B7280;font-size:13px;">Firebase ist bereits konfiguriert – einfach speichern.</p>
+  </div>
+  <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:13px;padding:13px;margin-bottom:18px;font-size:13px;color:#1e40af;">
+    <strong>Optional:</strong> Gemini API Key für automatische Aktionssuche<br>
+    <a href="https://aistudio.google.com/app/apikey" target="_blank" style="text-decoration:underline;">aistudio.google.com/app/apikey</a> → Create API Key (kostenlos)
+  </div>
+  <div style="font-size:10px;color:#6B7280;font-weight:600;margin-bottom:4px;">Gemini API Key (optional)</div>
+  <input type="password" id="apiKeyInput" class="inp" placeholder="AIza...">
+  <button onclick="saveSetup()" class="btn-dark">💾 Speichern &amp; Starten</button>
+  <button onclick="closeSetup()" class="btn-light">Schließen</button>
+</div>
+
+<!-- ═══ LOGIN ═══════════════════════════════════════════════════════════════ -->
+<div id="loginScreen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(150deg,#E8F5E9 0%,#F1F8E9 50%,#E8F5E9 100%);position:relative;overflow:hidden;padding:32px 20px;">
+  <!-- Floating decorations -->
+  <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA4MCAxMDAiIHdpZHRoPSI4MCIgaGVpZ2h0PSIxMDAiPjxyZWN0IHg9IjgiIHk9IjUiIHdpZHRoPSI2NCIgaGVpZ2h0PSI4OCIgcng9IjgiIGZpbGw9IndoaXRlIiBzdHJva2U9IiNDOEU2QzkiIHN0cm9rZS13aWR0aD0iMiIvPjxjaXJjbGUgY3g9IjQwIiBjeT0iMzIiIHI9IjE0IiBmaWxsPSIjRThGNUU5Ii8+PGNpcmNsZSBjeD0iNDAiIGN5PSIzMiIgcj0iMTQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzRDQUY1MCIgc3Ryb2tlLXdpZHRoPSIyLjUiLz48cG9seWxpbmUgcG9pbnRzPSIzMiwzMiAzOCwzOCA1MCwyNCIgc3Ryb2tlPSIjNENBRjUwIiBzdHJva2Utd2lkdGg9IjMiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjxyZWN0IHg9IjIwIiB5PSI1NiIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQiIHJ4PSIyIiBmaWxsPSIjQzhFNkM5Ii8+PHJlY3QgeD0iMjAiIHk9IjY2IiB3aWR0aD0iMjgiIGhlaWdodD0iNCIgcng9IjIiIGZpbGw9IiNDOEU2QzkiLz48cmVjdCB4PSIyMCIgeT0iNzYiIHdpZHRoPSIzNCIgaGVpZ2h0PSI0IiByeD0iMiIgZmlsbD0iI0M4RTZDOSIvPjwvc3ZnPg==" class="fa" style="position:absolute;top:9%;left:2%;width:72px;filter:drop-shadow(0 6px 12px rgba(0,0,0,0.10));">
+  <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTIwIiB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEyMCI+PHJlY3QgeD0iMTUiIHk9IjM4IiB3aWR0aD0iNzAiIGhlaWdodD0iNzIiIHJ4PSIxMiIgZmlsbD0iIzRDQUY1MCIgb3BhY2l0eT0iMC44NSIvPjxkZWZzPjxsaW5lYXJHcmFkaWVudCBpZD0iYmFnR3JhZCIgeDE9IjAiIHkxPSIwIiB4Mj0iMSIgeTI9IjEiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiM4MUM3ODQiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMzODhFM0MiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB4PSIxNSIgeT0iMzgiIHdpZHRoPSI3MCIgaGVpZ2h0PSI3MiIgcng9IjEyIiBmaWxsPSJ1cmwoI2JhZ0dyYWQpIi8+PHBhdGggZD0iTTM1IDM4IFEzNSAxOCA1MCAxOCBRNjUgMTggNjUgMzgiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzJFN0QzMiIgc3Ryb2tlLXdpZHRoPSI1IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48cmVjdCB4PSIyOCIgeT0iNTUiIHdpZHRoPSI0NCIgaGVpZ2h0PSIzIiByeD0iMiIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjMpIi8+PHJlY3QgeD0iMjgiIHk9IjY0IiB3aWR0aD0iMzAiIGhlaWdodD0iMyIgcng9IjIiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4yKSIvPjx0ZXh0IHg9IjUwIiB5PSI5MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIyMiIgZmlsbD0id2hpdGUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7wn5uNPC90ZXh0Pjwvc3ZnPg==" class="fb" style="position:absolute;top:7%;right:2%;width:76px;filter:drop-shadow(0 6px 12px rgba(0,0,0,0.12));">
+  <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMTAgMTAwIiB3aWR0aD0iMTEwIiBoZWlnaHQ9IjEwMCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJiYXNrR3JhZCIgeDE9IjAiIHkxPSIwIiB4Mj0iMCIgeTI9IjEiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNBNUQ2QTciLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiM0M0EwNDciLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cGF0aCBkPSJNMzAgNDggUTMwIDIwIDU1IDIwIFE4MCAyMCA4MCA0OCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMkU3RDMyIiBzdHJva2Utd2lkdGg9IjYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjxyZWN0IHg9IjEyIiB5PSI0NiIgd2lkdGg9Ijg2IiBoZWlnaHQ9IjQ2IiByeD0iMTQiIGZpbGw9InVybCgjYmFza0dyYWQpIi8+PGxpbmUgeDE9IjM1IiB5MT0iNDYiIHgyPSIzNSIgeTI9IjkyIiBzdHJva2U9InJnYmEoMjU1LDI1NSwyNTUsMC4yNSkiIHN0cm9rZS13aWR0aD0iMiIvPjxsaW5lIHgxPSI1NSIgeTE9IjQ2IiB4Mj0iNTUiIHkyPSI5MiIgc3Ryb2tlPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMjUpIiBzdHJva2Utd2lkdGg9IjIiLz48bGluZSB4MT0iNzUiIHkxPSI0NiIgeDI9Ijc1IiB5Mj0iOTIiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjI1KSIgc3Ryb2tlLXdpZHRoPSIyIi8+PGxpbmUgeDE9IjEyIiB5MT0iNjUiIHgyPSI5OCIgeTI9IjY1IiBzdHJva2U9InJnYmEoMjU1LDI1NSwyNTUsMC4yNSkiIHN0cm9rZS13aWR0aD0iMiIvPjxjaXJjbGUgY3g9IjM1IiBjeT0iNDQiIHI9IjEwIiBmaWxsPSIjRUY1MzUwIi8+PGNpcmNsZSBjeD0iNTUiIGN5PSI0MCIgcj0iOSIgZmlsbD0iIzY2QkI2QSIvPjxjaXJjbGUgY3g9Ijc1IiBjeT0iNDMiIHI9IjEwIiBmaWxsPSIjRkZBNzI2Ii8+PC9zdmc+" class="fc" style="position:absolute;top:34%;right:0%;width:84px;filter:drop-shadow(0 6px 14px rgba(0,0,0,0.12));">
+  <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA4MCAxMjAiIHdpZHRoPSI4MCIgaGVpZ2h0PSIxMjAiPjxkZWZzPjxsaW5lYXJHcmFkaWVudCBpZD0iY2Fyck dyYWQiIHgxPSIwIiB5MT0iMCIgeDI9IjAiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjRkZBNzI2Ii8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjRTY1MTAwIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHBhdGggZD0iTTQwIDIwIFE2MCAzMCA1NSA4MCBRNTAgMTAwIDQwIDEwOCBRMzAgMTAwIDI1IDgwIFEyMCAzMCA0MCAyMFoiIGZpbGw9IiNGRkE3MjYiLz48cGF0aCBkPSJNNDAgMjAgUTMwIDAgMjAgOCIgc3Ryb2tlPSIjNDNBMDQ3IiBzdHJva2Utd2lkdGg9IjQiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjxwYXRoIGQ9Ik00MCAyMCBRNDAgMiAzNSAtMiIgc3Ryb2tlPSIjNENBRjUwIiBzdHJva2Utd2lkdGg9IjMuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PHBhdGggZD0iTTQwIDIwIFE1MCAwIDYwIDgiIHN0cm9rZT0iIzQzQTA0NyIgc3Ryb2tlLXdpZHRoPSI0IiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48L3N2Zz4=" class="fd" style="position:absolute;top:38%;left:1%;width:62px;filter:drop-shadow(0 6px 12px rgba(0,0,0,0.10));">
+  <div style="text-align:center;position:relative;z-index:2;width:100%;max-width:340px;">
+    <div style="background:white;border-radius:32px;padding:28px 28px 20px;margin-bottom:16px;box-shadow:0 16px 48px rgba(44,95,45,0.13);">
+      <img src="data:image/jpeg;base64,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o+b+4fzFHzf3D+YoAKKPm/uH8xR839w/mKACij5v7h/MUfN/cP5igAoo+b+4fzFHzf3D+YoAKKPm/uH8xRhz22+5oAWL7zn3xT6FUKMCikMWkZlX7xAodtqk+lRAY5PLdzQA/wA1P7wo81P7wpKKYC+an94Uean94UlFAC+an94Uean94UlFAC+an94Uean94UlFAC+an94Uean94UlFAC+an94Uean94UlFAC+an94Uean94UlFAC+an94Uean94UlFAC+an94Uean94UlFAhfNT+8KPNT+8KSigBfNT+8KPNT+8KSigBfNT+8KPNT+8KSigBfNT+8KPNT+8KSigBfNT+8KPNT+8KSigBfNT+8KPNT+8KSigBfNT+8KPNT+8KSigBfNT+8KPNT+8KSigBfNT+8KPNT+8KSigBfNT+8KVXVujA02kIB60AS0lNjJIIPUHFOpDGzf6s/UfzpKWX/Vn6j+dJTEJTBPCZTEJYzKOqBhu/Kn1xGq6VZXPjGxttJtkgvIZPt17dJwdhPC+5Y1E5OK0N6FONRtSdtLnb0UVxLanewa8ltqtxfWTy6li1uF+ezuoc/LFkcI+PXBLDqQcVZgdtRXPWnij7SmnyrZMINTEn2JzKMuVUsA4x8u5VJHXHeoLDxe1zBbzS6XNGlzpr38CxyiR3CbdybQPvfMMdc+1FgOoorkLjxVd3UGmz6THZyw3Gox27PHch1dShYj7uVORg5GRj3qaPXfsV1qSPbztMdUjtf3t1uiQtErBgcfImO2PvH3osB1NFcrD4zWW0tJPsWy4uYZZ0habjy0YLncF5LE8cYI5zVm08VRXeqW9jFbGKSZI5BHcyeVKUdN25UI+YL90gHIIPHFFgOhooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooqvqMhh0+6lWXySkLsJfLMmzAJztHLY64HXpQBYorifD9npWnappdzpviKa5n1WN5J1cmUajhSfNI6RlTxkYGML6V21ACx/ff8ACn0yP77/AIU+kxjZf9WfqP50lOkBZCB17UwEEZFMArKt9OvY/EV1qEl6r2csKolv5YBUjHOfz/OtWik1ccZuN7dRaxYPDdpEscTT3UttHc/akt5HBRZNxcHpnAY5C5wK2aKZJjW3hqytTbiKScR2gkFpEWBW33ggleOcAkDOcAkVDD4Ts4YbOKO7v1Wzs3s4SsoBEbYzyFzn5Vwfb61v0UXAxJvC9lMWkaa5W6a6jujcoyq/mIu1TgLt6Eg8c5qlrPhqSQyNZzXMi3d6lxdgTKkg2JtUxnGByEyGzkA966iii4HOad4fuSsU9/f3i3kEki286yIZVgbb+7kO3a/K56ccc8ZN46BbPcxzTTXMyxTrcRxyybwsirtDAkbh0yRnBNatFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQBm6ZoGlaVeXd3p1jDb3F226Z0HLd/wGcnAwMknrWlRRQAsf33/Cn0yLnLdiePpT6QxaY0YJyCVPtT6YZOcKNxH5UAJ5bf3z+VHlt/f/QUb3/uD/vqje/9wf8AfVMQeW39/wDQUeW39/8AQUb3/uj/AL6o3v8A3R/31QAeW39/9BR5bf3/ANBRvf8AuD/vqje/90f99UAHlt/f/QUeW39/9BRvf+4P++qN7/3R/wB9UAHlt/f/AEFHlt/f/QUb3/uj/vqje/8AcH/fVAB5bf3/ANBR5bf3/wBBRvf+6P8Avqje/wDcH/fVAB5bf3/0FHlt/f8A0FG9/wC4P++qN7/3R/31QAeW39/9BR5bf3/0FG9/7o/76o3v/dH/AH1QAeW398/lR5bf3/0o3v8A3R/31Rvb+6P++qQB5bf3/wBKPLb+/wDpRvb+6P8Avqje390f99UDDy2/v/pR5bf3/wBKN7f3R/31Rvb+6P8AvqgA8tv7/wClHlt/f/Sje390f99Ub2/uj/vqgA8tv7/6UeW39/8ASje390f99Ub2/uj/AL6oEHlt/f8A0o8tv7/6Ub2/uj/vqje390f99UDDy2/v/pR5bf3/ANKN7f3R/wB9Ub2/uj/vqgA8tv7/AOlHlt/f/Sje390f99Ub2/uj/vqgA8tv7/6UeW39/wDQUb2/uj/vqje/90f99UxB5bf3/wBKPLb+/wDpRvf+6P8Avqje390f99UgDy2/v/pR5efvMT7dqN7/AN0f99UeYR95cD1BzTAkpKWkpDEPQ/So0+4v0oopgLRRRSEFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFMAooopDCiiigAooooAKKKKACiiigAooooAKKKKACiiigAooopiCiiikMKWiigQQ/c/E/zp9FFAz//2Q==" style="width:140px;height:130px;object-fit:contain;display:block;margin:0 auto 10px;">
+      <div style="font-family:'Playfair Display',Georgia,serif;font-size:32px;font-weight:700;color:#1C2B1A;letter-spacing:-0.5px;">my Wagerl</div>
+    </div>
+    <p style="color:#9EC49E;font-size:11px;letter-spacing:3px;font-weight:600;margin:0 0 24px;text-transform:uppercase;">Mein cleverer Einkauf</p>
+    <div style="display:flex;gap:14px;justify-content:center;margin-bottom:24px;width:100%;">
+      <button onclick="login('du')" class="tap" style="background:white;border:none;border-radius:24px;padding:32px 20px 24px;box-shadow:0 6px 20px rgba(44,95,45,0.12);text-align:center;flex:1;cursor:pointer;">
+        <div style="font-size:62px;margin-bottom:12px;line-height:1;">🧑</div>
+        <div style="font-weight:700;font-size:20px;color:#1C2B1A;">Flo</div>
+      </button>
+      <button onclick="login('frau')" class="tap" style="background:white;border:none;border-radius:24px;padding:32px 20px 24px;box-shadow:0 6px 20px rgba(44,95,45,0.12);text-align:center;flex:1;cursor:pointer;">
+        <div style="font-size:62px;margin-bottom:12px;line-height:1;">👩</div>
+        <div style="font-weight:700;font-size:20px;color:#1C2B1A;">Vicy</div>
+      </button>
+    </div>
+    <div id="loginStatus" style="color:#9EC49E;font-size:12px;margin-bottom:14px;min-height:18px;"></div>
+    <button onclick="openSetup()" class="tap" style="background:white;border:none;color:#6B7280;border-radius:16px;padding:12px 30px;font-size:13px;font-weight:600;box-shadow:0 3px 12px rgba(0,0,0,0.07);display:inline-flex;align-items:center;gap:8px;cursor:pointer;">⚙️ Einstellungen</button>
+  </div>
+</div>
+
+<!-- ═══ APP ═════════════════════════════════════════════════════════════════ -->
+<div id="app" style="display:none;min-height:100vh;">
+  <div style="background:#1C2B1A;padding:18px 17px 0;position:sticky;top:0;z-index:10;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+      <div>
+        <div style="font-size:10px;color:#5A7A5A;letter-spacing:2px;text-transform:uppercase;margin-bottom:2px;">Willkommen</div>
+        <div id="headerName" style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:white;"></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <div style="background:rgba(255,255,255,0.08);border-radius:18px;padding:5px 11px;display:flex;align-items:center;gap:5px;">
+          <div style="width:6px;height:6px;border-radius:50%;background:#4ade80;box-shadow:0 0 6px #4ade80;"></div>
+          <span id="otherName" style="font-size:11px;color:#94a3b8;"></span>
+        </div>
+        <button onclick="logout()" class="tap" style="background:rgba(255,255,255,0.08);border:none;border-radius:10px;width:34px;height:34px;color:#94a3b8;font-size:14px;cursor:pointer;">⇦</button>
+        <button onclick="openSetup()" class="tap" style="background:rgba(255,255,255,0.08);border:none;border-radius:10px;width:34px;height:34px;color:#94a3b8;font-size:14px;cursor:pointer;">⚙️</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:7px;">
+      <div style="flex:1;background:rgba(134,239,172,0.10);border-radius:9px 9px 0 0;padding:8px 0 12px;text-align:center;">
+        <div id="statOpen" style="font-size:21px;font-weight:700;color:#86efac;line-height:1;">0</div>
+        <div style="font-size:9px;color:#5A7A5A;margin-top:3px;">Liste</div>
+      </div>
+      <div style="flex:1;background:rgba(196,181,253,0.10);border-radius:9px 9px 0 0;padding:8px 0 12px;text-align:center;">
+        <div id="statTmpl" style="font-size:21px;font-weight:700;color:#c4b5fd;line-height:1;">0</div>
+        <div style="font-size:9px;color:#5A7A5A;margin-top:3px;">Zu besorgen</div>
+      </div>
+      <div style="flex:1;background:rgba(251,191,36,0.10);border-radius:9px 9px 0 0;padding:8px 0 12px;text-align:center;">
+        <div id="statDeals" style="font-size:21px;font-weight:700;color:#fbbf24;line-height:1;">0</div>
+        <div style="font-size:9px;color:#5A7A5A;margin-top:3px;">Rabatte</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div style="background:white;display:flex;position:sticky;top:118px;z-index:9;box-shadow:0 1px 0 #EEEEE8,0 4px 12px rgba(0,0,0,0.05);">
+    <button class="tab-btn active" data-tab="list"     onclick="switchTab('list')"    ><div style="font-size:16px;">📋</div>Liste</button>
+    <button class="tab-btn"        data-tab="template" onclick="switchTab('template')"><div style="font-size:16px;">📌</div>Zu besorgen</button>
+    <button class="tab-btn"        data-tab="deals"    onclick="switchTab('deals')"   style="position:relative;"><div style="font-size:16px;">🏷️</div>Rabatte<span id="dealBadge" style="display:none;position:absolute;top:5px;right:calc(50% - 14px);background:#ef4444;color:white;border-radius:7px;font-size:8px;padding:1px 4px;font-weight:700;"></span></button>
+    <button class="tab-btn"        data-tab="notifs"   onclick="switchTab('notifs')"  style="position:relative;"><div style="font-size:16px;">🔔</div>News<span id="notifBadge" style="display:none;position:absolute;top:5px;right:calc(50% - 14px);background:#ef4444;color:white;border-radius:7px;font-size:8px;padding:1px 4px;font-weight:700;"></span></button>
+  </div>
+
+  <div style="padding:13px 13px 100px;">
+    <div id="tab-list"></div>
+    <div id="tab-template" style="display:none;"></div>
+    <div id="tab-deals"    style="display:none;"></div>
+    <div id="tab-notifs"   style="display:none;"></div>
+  </div>
+
+  <button id="mainFab" onclick="openAddModal()" class="tap" style="position:fixed;bottom:26px;left:50%;transform:translateX(-50%);color:white;border:none;border-radius:15px;padding:13px 26px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;z-index:20;display:flex;align-items:center;gap:7px;background:#1C2B1A;box-shadow:0 8px 24px rgba(28,43,26,0.5);">
+    <span style="font-size:19px;line-height:1;">+</span><span id="fabLabel">Artikel hinzufügen</span>
+  </button>
+</div>
+
+<!-- ═══ SHOPPING MODE ═════════════════════════════════════════════════════ -->
+<div id="shopMode">
+  <div style="background:#0F172A;padding:16px 14px 12px;position:sticky;top:0;z-index:5;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <button onclick="closeShopMode()" class="tap" style="background:rgba(255,255,255,0.10);border:none;border-radius:10px;width:40px;height:40px;color:white;font-size:18px;cursor:pointer;flex-shrink:0;">←</button>
+      <div style="flex:1;">
+        <div style="font-family:'Playfair Display',serif;font-size:19px;font-weight:700;color:white;">Einkaufsmodus</div>
+        <div id="shopProgress" style="font-size:12px;color:#94a3b8;margin-top:2px;"></div>
+      </div>
+      <button onclick="resetTemplate()" class="tap" style="background:rgba(255,255,255,0.08);border:none;border-radius:10px;padding:8px 12px;color:#94a3b8;font-size:12px;cursor:pointer;">🔄 Reset</button>
+    </div>
+    <div style="background:rgba(255,255,255,0.08);border-radius:99px;height:6px;overflow:hidden;margin-top:12px;">
+      <div id="shopProgressBar" style="background:linear-gradient(90deg,#4ade80,#22c55e);height:100%;border-radius:99px;width:0%;transition:width .4s ease;"></div>
+    </div>
+  </div>
+  <div id="shopList" style="padding-top:10px;"></div>
+</div>
+
+<!-- ═══ STORE PICKER MODAL ═══════════════════════════════════════════════ -->
+<div id="storePickerModal" style="display:none;" class="modal-bg" onclick="if(event.target===this)closeModal('storePickerModal')">
+  <div class="modal-box">
+    <div class="modal-handle"></div>
+    <h3 style="font-family:'Playfair Display',serif;font-size:18px;color:#111827;margin-bottom:6px;">Supermarkt wählen</h3>
+    <p style="font-size:13px;color:#6B7280;margin-bottom:16px;">Für welchen Supermarkt soll der Artikel gemerkt werden?</p>
+    <div id="storePickerList"></div>
+    <button onclick="confirmStorePicker('')" class="btn-light" style="margin-top:4px;">Ohne Supermarkt merken</button>
+  </div>
+</div>
+
+<!-- ═══ ADD MODAL ═════════════════════════════════════════════════════════ -->
+<div id="addModal" style="display:none;" class="modal-bg" onclick="if(event.target===this)closeModal('addModal')">
+  <div class="modal-box">
+    <div class="modal-handle"></div>
+    <h3 id="addModalTitle" style="font-family:'Playfair Display',serif;font-size:20px;color:#111827;margin-bottom:14px;">Neuer Artikel</h3>
+    <input id="addName"  class="inp" placeholder="Name (z.B. Milch, Butter ...)">
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <input id="addQty"  class="inp" placeholder="Menge"   value="1" style="flex:1;margin-bottom:0;">
+      <input id="addUnit" class="inp" placeholder="Einheit"            style="flex:1;margin-bottom:0;">
+    </div>
+    <select id="addCat"   class="inp"></select>
+    <select id="addStore" class="inp"></select>
+    <input id="addNote"  class="inp" placeholder="Notiz (optional)">
+    <div style="display:flex;gap:8px;margin-top:4px;">
+      <button onclick="submitAdd()" class="btn-dark tap" style="margin-bottom:0;">Hinzufügen ✓</button>
+      <button onclick="closeModal('addModal')" class="btn-light tap" style="margin-bottom:0;">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ EDIT MODAL ════════════════════════════════════════════════════════ -->
+<div id="editModal" style="display:none;" class="modal-bg" onclick="if(event.target===this)closeModal('editModal')">
+  <div class="modal-box">
+    <div class="modal-handle"></div>
+    <h3 style="font-family:'Playfair Display',serif;font-size:20px;color:#111827;margin-bottom:14px;">Artikel bearbeiten</h3>
+    <input type="hidden" id="editId">
+    <input type="hidden" id="editType">
+    <div style="display:flex;gap:7px;margin-bottom:10px;">
+      <div style="flex:2;"><div style="font-size:10px;color:#6B7280;font-weight:600;margin-bottom:4px;">Name</div><input id="editName" class="inp" style="margin-bottom:0;"></div>
+      <div style="flex:1;"><div style="font-size:10px;color:#6B7280;font-weight:600;margin-bottom:4px;">Menge</div><input id="editQty" class="inp" style="margin-bottom:0;"></div>
+      <div style="flex:1;"><div style="font-size:10px;color:#6B7280;font-weight:600;margin-bottom:4px;">Einheit</div><input id="editUnit" class="inp" placeholder="kg,L..." style="margin-bottom:0;"></div>
+    </div>
+    <div style="font-size:10px;color:#6B7280;font-weight:600;margin-bottom:4px;margin-top:8px;">Kategorie</div>
+    <select id="editCat"   class="inp"></select>
+    <div style="font-size:10px;color:#6B7280;font-weight:600;margin-bottom:4px;">Supermarkt</div>
+    <select id="editStore" class="inp"></select>
+    <div style="font-size:10px;color:#6B7280;font-weight:600;margin-bottom:4px;">Notiz</div>
+    <input id="editNote"  class="inp" placeholder="z.B. Marke, Variante ...">
+    <div style="font-size:10px;color:#6B7280;font-weight:600;margin-bottom:4px;">Produktfoto</div>
+    <div id="editImagePreview" style="margin-bottom:8px;"></div>
+    <button onclick="document.getElementById('editImageInput').click()" class="tap" style="width:100%;padding:10px;background:#F3F4F6;border:1.5px dashed #D1D5DB;border-radius:11px;font-size:12px;color:#6B7280;cursor:pointer;margin-bottom:10px;">📷 Foto / Bild auswählen</button>
+    <input type="file" id="editImageInput" accept="image/*" style="display:none;" onchange="handleImageUpload(this)">
+    <div id="dealSearchArea"></div>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button onclick="submitEdit()" class="btn-dark tap" style="margin-bottom:0;">Speichern ✓</button>
+      <button onclick="closeModal('editModal')" class="btn-light tap" style="margin-bottom:0;">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SCRIPT ════════════════════════════════════════════════════════════ -->
+<script>
+const STORES=[
+  {id:"spar",      name:"SPAR",       color:"#00883A",emoji:"🌲"},
+  {id:"eurospar",  name:"EUROSPAR",   color:"#007A33",emoji:"🏬"},
+  {id:"interspar", name:"INTERSPAR",  color:"#005C29",emoji:"🏬"},
+  {id:"maximarkt", name:"Maximarkt",  color:"#E30613",emoji:"🏪"},
+  {id:"hofer",     name:"Hofer",      color:"#003DA5",emoji:"🏷️"},
+  {id:"billa",     name:"BILLA",      color:"#E2001A",emoji:"🛒"},
+  {id:"billaplus", name:"BILLA PLUS", color:"#C8002A",emoji:"🛍️"},
+  {id:"lidl",      name:"Lidl",       color:"#0050AA",emoji:"🔵"},
+  {id:"penny",     name:"PENNY",      color:"#CC0000",emoji:"🔴"},
+];
+const CATS=["🥦 Obst & Gemüse","🥩 Fleisch & Fisch","🧀 Milchprodukte","🍞 Backwaren","🧴 Hygiene","🥫 Vorrat","🍷 Getränke","❓ Sonstiges"];
+const USERS={du:{name:"Flo",emoji:"🧑",color:"#3b82f6"},frau:{name:"Vicy",emoji:"👩",color:"#ec4899"}};
+const FB_CFG={
+  apiKey:"AIzaSyAt53pLIrojwDFtg4xZiDi1sjs2o3pyqK0",
+  authDomain:"einkaufsliste-e2f0c.firebaseapp.com",
+  databaseURL:"https://einkaufsliste-e2f0c-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:"einkaufsliste-e2f0c",
+  storageBucket:"einkaufsliste-e2f0c.firebasestorage.app",
+  messagingSenderId:"77318998625",
+  appId:"1:77318998625:web:324c77a07d849b2df27820"
+};
+
+let db=null, currentUser=null, currentTab="list", addTarget="list", listSort="default";
+let state={items:{},template:{},deals:{},notifications:{}};
+let storePickerCallback=null;
+let dealRefreshTimer=null;
+let lastDealRefresh=0;
+
+// ── Init ─────────────────────────────────────────────────────────────────
+function initApp(){
+  if(typeof firebase==="undefined"){setTimeout(initApp,500);return;}
+  try{
+    const cfg=JSON.parse(localStorage.getItem("fc_cfg")||"null")||FB_CFG;
+    if(!firebase.apps.length) firebase.initializeApp(cfg);
+    db=firebase.database();
+    ["items","template","deals","notifications"].forEach(k=>{
+      db.ref(k).on("value",snap=>{state[k]=snap.val()||{};render();});
+    });
+    document.getElementById("loginStatus").textContent="✅ Verbunden";
+    const savedKey=localStorage.getItem("fc_gemini")||"";
+    if(savedKey) document.getElementById("apiKeyInput").value=savedKey;
+  }catch(e){
+    document.getElementById("loginStatus").textContent="⚠️ "+e.message;
+  }
+}
+
+// ── Setup ─────────────────────────────────────────────────────────────────
+function openSetup(){document.getElementById("setupScreen").style.display="block";}
+function closeSetup(){document.getElementById("setupScreen").style.display="none";}
+function saveSetup(){
+  const key=document.getElementById("apiKeyInput").value.trim();
+  if(key) localStorage.setItem("fc_gemini",key);
+  localStorage.setItem("fc_cfg",JSON.stringify(FB_CFG));
+  closeSetup();
+  if(!firebase.apps.length) initApp();
+  else document.getElementById("loginStatus").textContent="✅ Firebase verbunden";
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────
+function login(user){
+  if(!db){alert("App wird noch geladen – bitte kurz warten");return;}
+  currentUser=user;
+  document.getElementById("loginScreen").style.display="none";
+  document.getElementById("app").style.display="block";
+  const u=USERS[user],other=USERS[user==="du"?"frau":"du"];
+  document.getElementById("headerName").textContent=u.emoji+" "+u.name;
+  document.getElementById("otherName").textContent=other.emoji+" "+other.name;
+  populateSelects();
+  render();
+  // Start deal refresh polling every 30 min while logged in
+  startDealRefreshTimer();
+}
+function logout(){
+  currentUser=null;
+  if(dealRefreshTimer) clearInterval(dealRefreshTimer);
+  document.getElementById("app").style.display="none";
+  document.getElementById("loginScreen").style.display="flex";
+}
+
+// ── Deal Refresh Strategy ─────────────────────────────────────────────────
+// Deals come from GitHub Actions → Firebase automatically.
+// We re-subscribe on tab focus and check every 30 min.
+function startDealRefreshTimer(){
+  if(dealRefreshTimer) clearInterval(dealRefreshTimer);
+  dealRefreshTimer=setInterval(()=>{
+    if(db&&currentUser){
+      db.ref("deals").once("value").then(snap=>{state.deals=snap.val()||{};render();});
+    }
+  },30*60*1000);
+}
+document.addEventListener("visibilitychange",()=>{
+  if(!document.hidden&&db&&currentUser){
+    const now=Date.now();
+    if(now-lastDealRefresh>5*60*1000){
+      lastDealRefresh=now;
+      db.ref("deals").once("value").then(snap=>{state.deals=snap.val()||{};render();});
+      db.ref("notifications").once("value").then(snap=>{state.notifications=snap.val()||{};render();});
+    }
+  }
+});
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function storeById(id){return STORES.find(s=>s.id===id)||null;}
+function closeModal(id){document.getElementById(id).style.display="none";}
+function getApiKey(){return localStorage.getItem("fc_gemini")||"";}
+
+function switchTab(t){
+  currentTab=t;
+  document.querySelectorAll(".tab-btn").forEach(b=>b.classList.toggle("active",b.getAttribute("data-tab")===t));
+  ["list","template","deals","notifs"].forEach(k=>document.getElementById("tab-"+k).style.display=k===t?"block":"none");
+  document.getElementById("mainFab").style.display=t==="notifs"?"none":"flex";
+  document.getElementById("fabLabel").textContent=t==="template"?"Zu besorgen hinzufügen":"Artikel hinzufügen";
+  document.getElementById("mainFab").style.background=t==="template"?"#6D28D9":"#1C2B1A";
+  document.getElementById("mainFab").style.boxShadow=t==="template"?"0 8px 24px rgba(109,40,217,0.45)":"0 8px 24px rgba(28,43,26,0.5)";
+  render();
+}
+function populateSelects(){
+  ["addCat","editCat"].forEach(id=>{const el=document.getElementById(id);if(!el)return;el.innerHTML=CATS.map(c=>`<option value="${c}">${c}</option>`).join("");});
+  ["addStore","editStore"].forEach(id=>{const el=document.getElementById(id);if(!el)return;el.innerHTML=`<option value="">Kein Supermarkt</option>`+STORES.map(s=>`<option value="${s.id}">${s.emoji} ${s.name}</option>`).join("");});
+}
+
+// ── CRUD ──────────────────────────────────────────────────────────────────
+function toggleItem(k){
+  const item=state.items[k];if(!item)return;
+  const done=!item.done;
+  db.ref("items/"+k).update({done});
+  if(done) pushNotif(USERS[currentUser].name+' hat „'+item.name+'" erledigt ✅');
+}
+function deleteItem(k){db.ref("items/"+k).remove();}
+function toggleTemplate(k){const i=state.template[k];if(!i)return;db.ref("template/"+k).update({bought:!i.bought});}
+function deleteTemplate(k){db.ref("template/"+k).remove();}
+function clearDone(){Object.entries(state.items).forEach(([k,v])=>{if(v.done)db.ref("items/"+k).remove();});}
+function clearBought(){Object.entries(state.template).forEach(([k,v])=>{if(v.bought)db.ref("template/"+k).remove();});}
+function resetTemplate(){Object.keys(state.template).forEach(k=>db.ref("template/"+k).update({bought:false}));}
+
+function pushNotif(msg){
+  if(!db||!currentUser)return;
+  const to=currentUser==="du"?"frau":"du";
+  const time=new Date().toLocaleTimeString("de-AT",{hour:"2-digit",minute:"2-digit"});
+  db.ref("notifications").push({msg,from:currentUser,to,time,id:Date.now()});
+}
+
+// ── Add to template: prompt for store if missing ──────────────────────────
+function addItemToTemplate(k){
+  const item=state.items[k];if(!item)return;
+  if(Object.values(state.template).some(t=>t.name.toLowerCase()===item.name.toLowerCase()))return;
+  if(item.storeId){
+    _pushTemplate(item,item.storeId);
+  } else {
+    // Prompt user to pick a store
+    openStorePicker(item.name, storeId=>{
+      _pushTemplate(item, storeId);
+    });
+  }
+}
+function _pushTemplate(item, storeId){
+  db.ref("template").push({
+    name:item.name,qty:item.qty||"1",unit:item.unit||"",
+    cat:item.cat||CATS[7],storeId:storeId||"",bought:false
+  });
+}
+
+// ── Store picker ──────────────────────────────────────────────────────────
+let _pendingStoreItem=null;
+function openStorePicker(itemName, cb){
+  storePickerCallback=cb;
+  const el=document.getElementById("storePickerList");
+  el.innerHTML=STORES.map(s=>`
+    <button onclick="confirmStorePicker('${s.id}')" class="tap" style="width:100%;padding:12px 14px;background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:12px;display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:8px;">
+      <span style="font-size:22px;">${s.emoji}</span>
+      <span style="font-weight:600;font-size:14px;color:#111827;">${s.name}</span>
+      <span style="margin-left:auto;width:10px;height:10px;border-radius:50%;background:${s.color};"></span>
+    </button>`).join("");
+  document.getElementById("storePickerModal").style.display="flex";
+}
+function confirmStorePicker(storeId){
+  closeModal("storePickerModal");
+  if(storePickerCallback) storePickerCallback(storeId);
+  storePickerCallback=null;
+}
+
+// ── Add modal ─────────────────────────────────────────────────────────────
+function openAddModal(){
+  addTarget=currentTab==="template"?"template":"list";
+  document.getElementById("addModalTitle").textContent=addTarget==="template"?"Zu besorgen hinzufügen":"Neuer Artikel";
+  ["addName","addUnit","addNote"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("addQty").value="1";
+  populateSelects();
+  document.getElementById("addModal").style.display="flex";
+  setTimeout(()=>document.getElementById("addName").focus(),80);
+}
+function submitAdd(){
+  const name=document.getElementById("addName").value.trim();if(!name)return;
+  const item={name,qty:document.getElementById("addQty").value||"1",unit:document.getElementById("addUnit").value,cat:document.getElementById("addCat").value,storeId:document.getElementById("addStore").value,note:document.getElementById("addNote").value,id:Date.now()};
+  if(addTarget==="template") db.ref("template").push({...item,bought:false});
+  else{
+    db.ref("items").push({...item,done:false,by:currentUser});
+    pushNotif(USERS[currentUser].name+' hat „'+name+'" hinzugefügt 🛒');
+  }
+  closeModal("addModal");
+}
+
+// ── Edit modal ────────────────────────────────────────────────────────────
+let editImageData=null;
+function openEditModal(key,type){
+  const data=type==="template"?state.template[key]:state.items[key];if(!data)return;
+  editImageData=data.image||null;
+  document.getElementById("editId").value=key;
+  document.getElementById("editType").value=type;
+  document.getElementById("editName").value=data.name||"";
+  document.getElementById("editQty").value=data.qty||"1";
+  document.getElementById("editUnit").value=data.unit||"";
+  document.getElementById("editNote").value=data.note||"";
+  populateSelects();
+  document.getElementById("editCat").value=data.cat||CATS[7];
+  document.getElementById("editStore").value=data.storeId||"";
+  document.getElementById("editImagePreview").innerHTML=editImageData
+    ?`<div style="position:relative;display:inline-block;"><img src="${editImageData}" style="width:72px;height:72px;border-radius:12px;object-fit:cover;"><button onclick="removeImage()" style="position:absolute;top:-6px;right:-6px;background:#EF4444;border:none;border-radius:50%;width:20px;height:20px;color:white;font-size:13px;cursor:pointer;">×</button></div>`
+    :"";
+  renderDealSearch(data.name,false);
+  document.getElementById("editModal").style.display="flex";
+}
+function removeImage(){editImageData=null;document.getElementById("editImagePreview").innerHTML="";}
+function handleImageUpload(input){
+  const file=input.files[0];if(!file)return;
+  compressImage(file,600,0.72,dataUrl=>{
+    editImageData=dataUrl;
+    document.getElementById("editImagePreview").innerHTML=
+      `<div style="position:relative;display:inline-block;"><img src="${dataUrl}" style="width:72px;height:72px;border-radius:12px;object-fit:cover;"><button onclick="removeImage()" style="position:absolute;top:-6px;right:-6px;background:#EF4444;border:none;border-radius:50%;width:20px;height:20px;color:white;font-size:13px;cursor:pointer;">×</button></div>`;
+  });
+}
+// Compress image via canvas before saving (storage-efficient)
+function compressImage(file,maxPx,quality,cb){
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const img=new Image();
+    img.onload=()=>{
+      let w=img.width,h=img.height;
+      if(w>maxPx||h>maxPx){const s=maxPx/Math.max(w,h);w=Math.round(w*s);h=Math.round(h*s);}
+      const canvas=document.createElement("canvas");
+      canvas.width=w;canvas.height=h;
+      canvas.getContext("2d").drawImage(img,0,0,w,h);
+      cb(canvas.toDataURL("image/jpeg",quality));
+    };
+    img.src=ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function submitEdit(){
+  const key=document.getElementById("editId").value,type=document.getElementById("editType").value;
+  const changes={name:document.getElementById("editName").value.trim(),qty:document.getElementById("editQty").value,unit:document.getElementById("editUnit").value,cat:document.getElementById("editCat").value,storeId:document.getElementById("editStore").value,note:document.getElementById("editNote").value,image:editImageData||null};
+  if(!changes.name)return;
+  db.ref((type==="template"?"template":"items")+"/"+key).update(changes);
+  closeModal("editModal");
+}
+
+// ── Deal search (Gemini + marktguru link) ──────────────────────────────────
+function mgUrl(name,storeName){
+  const q=encodeURIComponent(name);
+  // marktguru search with store filter if available
+  if(storeName) return`https://www.marktguru.at/angebote?q=${q}&retailer=${encodeURIComponent(storeName)}`;
+  return`https://www.marktguru.at/angebote?q=${q}`;
+}
+
+function renderDealSearch(name,loading){
+  const area=document.getElementById("dealSearchArea");
+  if(!area)return;
+  const linkBtn=`<a href="${mgUrl(name)}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:11px 0;background:#1C2B1A;color:white;text-decoration:none;border-radius:10px;font-size:12px;font-weight:700;margin-top:8px;">🌐 Alle Details auf marktguru.at →</a>`;
+  const apiKey=getApiKey();
+  if(!apiKey){
+    area.innerHTML=`<div style="font-size:12px;color:#6B7280;background:#F9FAFB;border-radius:10px;padding:10px 12px;margin-top:10px;">Gemini API Key in ⚙️ hinterlegen für automatische Vorschau</div>${linkBtn}`;
+    return;
+  }
+  area.innerHTML=`<button onclick="runDealSearch('${name.replace(/'/g,"\\'")}',this)" class="tap" style="width:100%;padding:11px 0;background:#EDE9FE;color:#6D28D9;border:none;border-radius:10px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:7px;margin-top:10px;">🔍 Aktionen suchen</button>${linkBtn}`;
+}
+
+async function runDealSearch(name,btn){
+  const area=document.getElementById("dealSearchArea");if(!area)return;
+  const apiKey=getApiKey();
+  const link=`<a href="${mgUrl(name)}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:11px 0;background:#1C2B1A;color:white;text-decoration:none;border-radius:10px;font-size:12px;font-weight:700;margin-top:8px;">🌐 Auf marktguru.at öffnen →</a>`;
+  area.innerHTML=`<div style="background:#1C2B1A;border-radius:11px;padding:11px 13px;margin-top:10px;">
+    <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;"><span style="font-size:14px;">🔍</span><span style="font-size:12px;color:white;font-weight:600;">Suche Aktionen...</span></div>
+    ${[88,68,50].map(w=>`<div style="height:26px;width:${w}%;border-radius:6px;background:rgba(255,255,255,0.08);margin-bottom:6px;animation:pulse 1.2s ease-in-out infinite;"></div>`).join("")}
+  </div>`;
+  try{
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,{
+      method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({
+        contents:[{parts:[{text:`Suche aktuelle Angebote für "${name}" in österreichischen Supermärkten (SPAR, EUROSPAR, Hofer, BILLA, BILLA PLUS, Lidl, Penny, Maximarkt). Antworte NUR mit validem JSON ohne Markdown:\n{"found":true,"deals":[{"store":"Marktname","title":"Produkttitel","price":"1,99 EUR","savings":"-20%","until":"20.04.2026","url":"https://www.marktguru.at/..."}]}\noder {"found":false}. Maximal 3 Ergebnisse.`}]}],
+        tools:[{google_search:{}}],
+        generationConfig:{responseMimeType:"text/plain"}
+      })
+    });
+    const data=await res.json();
+    const text=(data.candidates?.[0]?.content?.parts||[]).map(p=>p.text||"").join("");
+    const m=text.match(/\{[\s\S]*\}/);
+    if(!m)throw new Error("Keine JSON-Antwort");
+    const result=JSON.parse(m[0]);
+    if(result.found&&result.deals?.length){
+      const cards=result.deals.map(d=>{
+        const store=STORES.find(s=>s.name===d.store)||null;
+        const dealLink=d.url||mgUrl(name);
+        return `<a href="${dealLink}" target="_blank" rel="noopener" style="display:block;background:#F9FAFB;border-radius:11px;padding:11px 12px;border:1px solid #E5E7EB;margin-bottom:7px;text-decoration:none;">
+          <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-bottom:5px;">
+            ${store?`<span style="font-size:10px;padding:2px 8px;border-radius:7px;background:${store.color};color:white;font-weight:700;">${store.emoji} ${d.store}</span>`:`<span style="font-size:11px;font-weight:600;color:#374151;">${esc(d.store||"")}</span>`}
+            ${d.price?`<span style="font-size:10px;padding:2px 8px;border-radius:7px;background:#FEF3C7;color:#92400E;font-weight:700;">💰 ${esc(d.price)}</span>`:""}
+            ${d.savings?`<span style="font-size:10px;padding:2px 8px;border-radius:7px;background:#DCFCE7;color:#166534;font-weight:700;">📉 ${esc(d.savings)}</span>`:""}
+          </div>
+          <div style="font-size:13px;font-weight:600;color:#111827;">${esc(d.title||"")}</div>
+          ${d.until?`<div style="font-size:10px;color:#9CA3AF;margin-top:3px;">⏳ bis ${esc(d.until)}</div>`:""}
+          <div style="font-size:10px;color:#6D28D9;margin-top:3px;">→ auf marktguru ansehen</div>
+        </a>`;
+      }).join("");
+      area.innerHTML=`<div style="margin-top:10px;animation:expandIn .25s ease;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+          <span>✨</span><span style="font-size:12px;font-weight:700;color:#111827;">Aktionen gefunden</span>
+          <button onclick="renderDealSearch('${name.replace(/'/g,"\\'")}',false)" style="margin-left:auto;font-size:11px;color:#6D28D9;background:none;border:none;cursor:pointer;font-weight:600;">↩</button>
+        </div>
+        ${cards}${link}
+      </div>`;
+    } else {
+      area.innerHTML=`<div style="margin-top:10px;background:#F9FAFB;border-radius:10px;padding:11px 13px;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:18px;">🤷</span>
+        <div style="flex:1;font-size:12px;color:#374151;font-weight:600;">Keine Aktionen gefunden</div>
+        <button onclick="renderDealSearch('${name.replace(/'/g,"\\'")}',false)" style="font-size:11px;color:#6D28D9;background:none;border:none;cursor:pointer;font-weight:600;">↩</button>
+      </div>${link}`;
+    }
+  }catch(e){
+    area.innerHTML=`<div style="margin-top:10px;background:#FFF5F5;border-radius:10px;padding:11px 13px;font-size:12px;color:#EF4444;">⚠️ Suche fehlgeschlagen: ${esc(e.message)}</div>${link}`;
+  }
+}
+
+// ── Shopping mode ──────────────────────────────────────────────────────────
+function openShopMode(){
+  document.getElementById("shopMode").classList.add("active");
+  renderShopMode();
+}
+function closeShopMode(){
+  document.getElementById("shopMode").classList.remove("active");
+}
+function renderShopMode(){
+  const tmpl=Object.entries(state.template||{}).map(([k,v])=>({...v,fbKey:k}));
+  const total=tmpl.length, bought=tmpl.filter(i=>i.bought).length;
+  document.getElementById("shopProgress").textContent=`${bought} von ${total} erledigt`;
+  document.getElementById("shopProgressBar").style.width=total?((bought/total)*100).toFixed(0)+"%":"0%";
+
+  // Group by store
+  const byStore={};const noStore=[];
+  tmpl.forEach(item=>{
+    if(item.storeId&&item.storeId!=="") {
+      if(!byStore[item.storeId])byStore[item.storeId]=[];
+      byStore[item.storeId].push(item);
+    } else noStore.push(item);
+  });
+
+  let html="";
+  const renderGroup=(items)=>items.sort((a,b)=>a.name.localeCompare(b.name)).map(item=>`
+    <div class="shop-item ${item.bought?"bought":""}">
+      <button onclick="toggleTemplate('${item.fbKey}');renderShopMode();" class="shop-check ${item.bought?"done":"open"}">
+        ${item.bought?`<span style="color:white;font-size:24px;font-weight:700;">✓</span>`:`<span style="font-size:24px;">○</span>`}
+      </button>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:18px;font-weight:700;color:${item.bought?"#6B7280":"white"};text-decoration:${item.bought?"line-through":"none"};line-height:1.3;">${esc(item.name)}</div>
+        ${item.qty||item.unit?`<div style="font-size:14px;color:#9CA3AF;margin-top:3px;">${esc(item.qty||"")}${esc(item.unit||"")}</div>`:""}
+        ${item.note?`<div style="font-size:12px;color:#6B7280;margin-top:2px;font-style:italic;">💬 ${esc(item.note)}</div>`:""}
+      </div>
+      ${item.image?`<img src="${item.image}" style="width:52px;height:52px;border-radius:12px;object-fit:cover;flex-shrink:0;">`:""}
+    </div>`).join("");
+
+  Object.entries(byStore).forEach(([storeId,items])=>{
+    const store=storeById(storeId);
+    if(!store)return;
+    const doneAll=items.every(i=>i.bought);
+    html+=`<div class="shop-store-header" style="background:${store.color}22;">
+      <span style="font-size:26px;">${store.emoji}</span>
+      <div style="flex:1;"><div style="font-size:16px;font-weight:700;color:${store.color};">${store.name}</div>
+      <div style="font-size:12px;color:#6B7280;">${items.filter(i=>i.bought).length}/${items.length} erledigt</div></div>
+      ${doneAll?`<span style="font-size:20px;">✅</span>`:""}
+    </div>`;
+    html+=renderGroup(items);
+  });
+  if(noStore.length){
+    html+=`<div class="shop-store-header" style="background:rgba(255,255,255,0.05);">
+      <span style="font-size:22px;">🛒</span>
+      <div style="font-size:15px;font-weight:600;color:#9CA3AF;">Kein Supermarkt</div>
+    </div>`;
+    html+=renderGroup(noStore);
+  }
+  if(!tmpl.length) html=`<div style="text-align:center;padding:60px 20px;color:#6B7280;"><div style="font-size:48px;margin-bottom:12px;">🎉</div><div style="font-size:18px;font-weight:600;">Alles erledigt!</div></div>`;
+  document.getElementById("shopList").innerHTML=html;
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function render(){
+  if(!currentUser)return;
+  populateSelects();
+  const items=Object.entries(state.items||{}).map(([k,v])=>({...v,fbKey:k})).sort((a,b)=>b.id-a.id);
+  const tmpl=Object.entries(state.template||{}).map(([k,v])=>({...v,fbKey:k})).sort((a,b)=>b.id-a.id);
+  const deals=Object.entries(state.deals||{}).map(([k,v])=>({...v,fbKey:k}));
+  // Fix: filter notifications FOR the current user only
+  const notifs=Object.entries(state.notifications||{}).map(([k,v])=>({...v,fbKey:k}))
+    .filter(n=>n.to===currentUser)
+    .sort((a,b)=>b.id-a.id).slice(0,30);
+
+  document.getElementById("statOpen").textContent=items.filter(i=>!i.done).length;
+  document.getElementById("statTmpl").textContent=tmpl.filter(i=>!i.bought).length;
+  document.getElementById("statDeals").textContent=deals.length;
+
+  const nb=document.getElementById("notifBadge");
+  nb.style.display=notifs.length>0?"block":"none";nb.textContent=notifs.length;
+  const db2=document.getElementById("dealBadge");
+  db2.style.display=deals.length>0?"block":"none";db2.textContent=deals.length;
+
+  // Build deal map for badge lookup: name.toLowerCase() → deal
+  const dealMap={};
+  deals.forEach(d=>{if(d.articleName)dealMap[d.articleName.toLowerCase()]=d;});
+
+  // ── LIST ──
+  // Sort
+  let sortedItems=[...items];
+  if(listSort==="alpha")  sortedItems.sort((a,b)=>a.name.localeCompare(b.name,"de"));
+  else if(listSort==="cat")   sortedItems.sort((a,b)=>(a.cat||"").localeCompare(b.cat||"","de")||a.name.localeCompare(b.name,"de"));
+  else if(listSort==="store") sortedItems.sort((a,b)=>(a.storeId||"zzz").localeCompare(b.storeId||"zzz")||a.name.localeCompare(b.name,"de"));
+
+  const doneCount=items.filter(i=>i.done).length;
+
+  const renderListItem=(item,i)=>{
+    const store=storeById(item.storeId);
+    const inTmpl=tmpl.some(t=>t.name.toLowerCase()===item.name.toLowerCase());
+    const deal=dealMap[item.name.toLowerCase()];
+    const dealTag=deal?`<span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;padding:2px 6px;border-radius:5px;background:#FEF3C7;color:#D97706;font-weight:700;margin-left:4px;">🏷️ ${esc(deal.savings||deal.price||"Aktion")}</span>`:"";
+    return `<div style="background:${item.done?"#F5F5F0":"white"};border-radius:16px;overflow:hidden;box-shadow:${item.done?"none":"0 2px 10px rgba(0,0,0,0.07)"};border:${item.done?"1px solid #EAEAE4":"1px solid transparent"};opacity:${item.done?.65:1};margin-bottom:8px;animation:slideUp .22s ease ${Math.min(i,6)*.04}s both;">
+      <div style="padding:12px 13px;display:flex;gap:10px;align-items:center;">
+        <div onclick="openEditModal('${item.fbKey}','list')" style="width:46px;height:46px;border-radius:12px;overflow:hidden;flex-shrink:0;background:${item.image?"transparent":"#F3F4F6"};display:flex;align-items:center;justify-content:center;border:${item.image?"none":"1.5px dashed #D1D5DB"};cursor:pointer;">
+          ${item.image?`<img src="${item.image}" style="width:100%;height:100%;object-fit:cover;">`:`<span style="font-size:18px;opacity:.35;">📷</span>`}
+        </div>
+        <button onclick="toggleItem('${item.fbKey}')" class="tap" style="width:24px;height:24px;border-radius:8px;flex-shrink:0;border:none;background:${item.done?"#1C2B1A":"white"};box-shadow:${item.done?"none":"inset 0 0 0 2px #D1D5DB"};display:flex;align-items:center;justify-content:center;cursor:pointer;">
+          ${item.done?"<span style='color:white;font-size:13px;font-weight:700;'>✓</span>":""}
+        </button>
+        <div style="flex:1;min-width:0;cursor:pointer;" onclick="openEditModal('${item.fbKey}','list')">
+          <div style="display:flex;gap:5px;align-items:baseline;flex-wrap:wrap;">
+            <span style="font-weight:600;font-size:14.5px;color:${item.done?"#9CA3AF":"#111827"};text-decoration:${item.done?"line-through":"none"};">${esc(item.name)}</span>
+            ${item.qty?`<span style="font-size:11px;color:#9CA3AF;">${esc(item.qty)}${esc(item.unit||"")}</span>`:""}
+            ${dealTag}
+          </div>
+          <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap;">
+            <span style="font-size:10px;color:#9CA3AF;">${esc(item.cat||"")}</span>
+            ${store?`<span style="font-size:10px;padding:2px 7px;border-radius:7px;background:${store.color}18;color:${store.color};font-weight:700;">${store.emoji} ${store.name}</span>`:""}
+          </div>
+          ${item.note?`<div style="font-size:11px;color:#94a3b8;margin-top:3px;font-style:italic;">💬 ${esc(item.note)}</div>`:""}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;flex-shrink:0;">
+          <button onclick="deleteItem('${item.fbKey}')" class="tap" style="background:none;border:none;color:#D1D5DB;font-size:17px;padding:0;line-height:1;cursor:pointer;">×</button>
+          ${!item.done?`<button onclick="addItemToTemplate('${item.fbKey}')" class="tap" style="padding:4px 8px;border:none;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;background:${inTmpl?"#F3F4F6":"#EDE9FE"};color:${inTmpl?"#9CA3AF":"#6D28D9"};">${inTmpl?"📌 ✓":"📌 merken"}</button>`:""}
+        </div>
+      </div>
+    </div>`;
+  };
+
+  // Sort bar
+  const sortBar=`<div style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+    <span style="font-size:10px;color:#9CA3AF;font-weight:600;white-space:nowrap;">Sortierung:</span>
+    ${[["default","🕐 Neu"],["alpha","🔤 A–Z"],["cat","📂 Kategorie"],["store","🏪 Markt"]].map(([k,l])=>
+      `<button onclick="listSort='${k}';render()" style="padding:4px 10px;border-radius:14px;border:none;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;background:${listSort===k?"#1C2B1A":"#EEEEE8"};color:${listSort===k?"white":"#6B7280"};">${l}</button>`
+    ).join("")}
+    ${doneCount>0?`<button onclick="clearDone()" class="tap" style="margin-left:auto;padding:4px 10px;border-radius:14px;border:1px solid #fecaca;background:#fff5f5;color:#ef4444;font-size:11px;font-weight:600;cursor:pointer;">🗑️ ${doneCount}</button>`:""}
+  </div>`;
+
+  let listHtml="";
+  if(listSort==="cat"||listSort==="store"){
+    const groupFn=listSort==="cat"
+      ?(item=>item.cat||"❓ Sonstiges")
+      :(item=>{const s=storeById(item.storeId);return s?s.id+"|"+s.emoji+" "+s.name:"zzz|🛒 Kein Supermarkt";});
+    const groups={};
+    sortedItems.forEach(item=>{const k=groupFn(item);if(!groups[k])groups[k]=[];groups[k].push(item);});
+    Object.keys(groups).sort().forEach(grpKey=>{
+      const grpName=listSort==="store"?grpKey.split("|")[1]:grpKey;
+      const storeId=listSort==="store"?grpKey.split("|")[0]:null;
+      const store=storeId?storeById(storeId):null;
+      listHtml+=`<div style="margin-bottom:14px;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:7px;padding:7px 11px;border-radius:9px;${store?"background:"+store.color+"12;color:"+store.color+";border-left:3px solid "+store.color:"background:#F3F4F6;color:#9CA3AF;"}">${grpName}</div>
+        ${groups[grpKey].map((item,i)=>renderListItem(item,i)).join("")}
+      </div>`;
+    });
+  } else {
+    if(sortedItems.length===0) listHtml=`<div style="text-align:center;color:#9CA3AF;padding:48px 0;"><div style="font-size:44px;">🎉</div><div style="margin-top:8px;font-weight:500;">Liste ist leer!</div></div>`;
+    else listHtml=sortedItems.map((item,i)=>renderListItem(item,i)).join("");
+  }
+
+  document.getElementById("tab-list").innerHTML=sortBar+listHtml;
+
+// ── TEMPLATE – grouped by store ──
+  const tmplBought=tmpl.filter(i=>i.bought).length;
+  // Group by storeId
+  const byStore={};const noStore=[];
+  tmpl.forEach(item=>{
+    const sid=item.storeId||"";
+    if(sid){if(!byStore[sid])byStore[sid]=[];byStore[sid].push(item);}
+    else noStore.push(item);
+  });
+  const renderTmplItem=item=>{
+    const store=storeById(item.storeId);
+    return `<div style="background:${item.bought?"#F5F5F0":"white"};border-radius:13px;padding:11px 13px;box-shadow:${item.bought?"none":"0 2px 8px rgba(0,0,0,0.06)"};opacity:${item.bought?.6:1};margin-bottom:6px;display:flex;align-items:center;gap:10px;transition:opacity .2s;">
+      <button onclick="toggleTemplate('${item.fbKey}')" class="tap" style="width:26px;height:26px;border-radius:8px;flex-shrink:0;border:none;background:${item.bought?"#6D28D9":"white"};box-shadow:${item.bought?"none":"inset 0 0 0 2px #D1D5DB"};display:flex;align-items:center;justify-content:center;cursor:pointer;">
+        ${item.bought?"<span style='color:white;font-size:12px;font-weight:700;'>✓</span>":""}
+      </button>
+      <div style="flex:1;min-width:0;cursor:pointer;" onclick="openEditModal('${item.fbKey}','template')">
+        <div style="font-weight:600;font-size:14px;color:${item.bought?"#9CA3AF":"#111827"};text-decoration:${item.bought?"line-through":"none"};">${esc(item.name)}</div>
+        ${item.qty?`<span style="font-size:11px;color:#9CA3AF;">${esc(item.qty)}${esc(item.unit||"")}</span>`:""}
+        ${item.note?`<div style="font-size:11px;color:#94a3b8;font-style:italic;">💬 ${esc(item.note)}</div>`:""}
+      </div>
+      <button onclick="deleteTemplate('${item.fbKey}')" class="tap" style="background:none;border:none;color:#D1D5DB;font-size:16px;padding:0;cursor:pointer;">×</button>
+    </div>`;
+  };
+  let tmplHtml=`<div style="background:linear-gradient(135deg,#4C1D95,#6D28D9);border-radius:16px;padding:14px 16px;margin-bottom:14px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+      <span style="font-size:22px;">📌</span>
+      <div><div style="font-weight:700;font-size:15px;color:white;">Zu besorgen</div>
+      <div style="font-size:11px;color:#C4B5FD;">${tmpl.length-tmplBought} offen · ${tmplBought} erledigt</div></div>
+      <button onclick="openShopMode()" class="tap" style="margin-left:auto;background:rgba(255,255,255,0.18);border:none;border-radius:10px;padding:8px 12px;color:white;font-size:12px;font-weight:700;cursor:pointer;">🛒 Einkaufsmodus</button>
+    </div>
+    ${tmpl.length>0?`<div style="background:rgba(255,255,255,0.15);border-radius:99px;height:5px;overflow:hidden;margin-bottom:10px;"><div style="background:#A78BFA;height:100%;border-radius:99px;width:${tmpl.length?((tmplBought/tmpl.length)*100).toFixed(0):0}%;transition:width .4s;"></div></div>`:""}
+    <div style="display:flex;gap:8px;">
+      <button onclick="clearBought()" class="tap" style="flex:1;padding:8px 0;background:rgba(255,255,255,0.15);border:none;border-radius:9px;color:white;font-size:11px;font-weight:600;cursor:pointer;">🗑️ Erledigte löschen</button>
+      <button onclick="resetTemplate()" class="tap" style="flex:1;padding:8px 0;background:rgba(255,255,255,0.15);border:none;border-radius:9px;color:white;font-size:11px;font-weight:600;cursor:pointer;">🔄 Alle zurücksetzen</button>
+    </div>
+  </div>`;
+  if(tmpl.length===0) tmplHtml+=`<div style="text-align:center;color:#9CA3AF;padding:44px 0;"><div style="font-size:40px;">📌</div><div style="margin-top:8px;font-weight:500;">Noch keine Artikel</div><div style="font-size:12px;margin-top:4px;">In der Liste auf 📌 tippen</div></div>`;
+  // Render each store group
+  Object.entries(byStore).forEach(([sid,items])=>{
+    const store=storeById(sid);
+    if(!store)return;
+    const done=items.filter(i=>i.bought).length;
+    tmplHtml+=`<div style="margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:${store.color}10;border-radius:11px;margin-bottom:8px;border-left:3px solid ${store.color};">
+        <span style="font-size:18px;">${store.emoji}</span>
+        <span style="font-size:12px;font-weight:700;color:${store.color};">${store.name}</span>
+        <span style="font-size:11px;color:#9CA3AF;margin-left:auto;">${done}/${items.length}</span>
+      </div>
+      ${items.sort((a,b)=>a.name.localeCompare(b.name)).map(renderTmplItem).join("")}
+    </div>`;
+  });
+  if(noStore.length){
+    tmplHtml+=`<div style="margin-bottom:16px;">
+      <div style="font-size:10px;font-weight:700;color:#9CA3AF;letter-spacing:.8px;text-transform:uppercase;margin-bottom:7px;padding-left:2px;">🛒 Kein Supermarkt</div>
+      ${noStore.sort((a,b)=>a.name.localeCompare(b.name)).map(renderTmplItem).join("")}
+    </div>`;
+  }
+  document.getElementById("tab-template").innerHTML=tmplHtml;
+
+  // ── DEALS ──
+  document.getElementById("tab-deals").innerHTML=deals.length===0
+    ?`<div style="text-align:center;color:#9CA3AF;padding:44px 0;"><div style="font-size:40px;">🏷️</div><p style="margin-top:8px;">Keine aktuellen Aktionen</p><p style="font-size:12px;margin-top:4px;">Das Skript sucht Mo &amp; Do nachts automatisch</p></div>`
+    :deals.map(d=>{
+      const store=storeById(d.storeId);
+      const link=d.url||mgUrl(d.articleName||"",d.storeName||"");
+      return `<div style="background:white;border-radius:15px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,0.06);margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+          <div style="flex:1;">
+            <div style="font-weight:700;font-size:15px;color:#111827;margin-bottom:7px;">${esc(d.articleName||"")}</div>
+            <div style="display:flex;gap:5px;flex-wrap:wrap;">
+              <span style="font-size:11px;padding:2px 9px;border-radius:8px;background:${store?store.color+"18":"#F3F4F6"};color:${store?store.color:"#6B7280"};font-weight:700;">${store?store.emoji+" ":""} ${esc(d.storeName||"")}</span>
+              ${d.price?`<span style="font-size:11px;padding:2px 9px;border-radius:8px;background:#FEF3C7;color:#D97706;font-weight:700;">💰 ${esc(d.price)}</span>`:""}
+              ${d.savings?`<span style="font-size:11px;padding:2px 9px;border-radius:8px;background:#DCFCE7;color:#16A34A;font-weight:700;">📉 ${esc(d.savings)}</span>`:""}
+            </div>
+            ${d.validUntil?`<div style="font-size:11px;color:#9CA3AF;margin-top:4px;">⏳ bis ${esc(d.validUntil)}</div>`:""}
+            <a href="${link}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;margin-top:8px;font-size:11px;color:#1C2B1A;font-weight:600;text-decoration:none;">🌐 Auf marktguru ansehen →</a>
+          </div>
+          ${d.price?`<div style="background:#F0FDF4;border-radius:11px;padding:9px 13px;text-align:center;flex-shrink:0;"><div style="font-size:17px;font-weight:800;color:#16A34A;">${esc(d.price)}</div></div>`:""}
+        </div>
+      </div>`;
+    }).join("");
+
+  // ── NOTIFS (fixed: filter by to===currentUser) ──
+  document.getElementById("tab-notifs").innerHTML=notifs.length===0
+    ?`<div style="text-align:center;color:#9CA3AF;padding:44px 0;"><div style="font-size:40px;">🔔</div><p style="margin-top:8px;">Keine Mitteilungen</p><p style="font-size:12px;margin-top:4px;">Hier erscheinen Aktionen von ${USERS[currentUser==="du"?"frau":"du"].name}</p></div>`
+    :notifs.map(n=>{
+      const from=USERS[n.from]||{emoji:"📢",color:"#94a3b8"};
+      return `<div style="background:white;border-radius:15px;padding:13px 14px;box-shadow:0 2px 10px rgba(0,0,0,0.06);border-left:3px solid ${from.color};margin-bottom:8px;">
+        <div style="display:flex;gap:10px;align-items:flex-start;">
+          <div style="width:38px;height:38px;border-radius:11px;background:${from.color}18;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;">${from.emoji}</div>
+          <div>
+            <div style="font-size:13px;color:#111827;line-height:1.45;">${esc(n.msg||"")}</div>
+            <div style="font-size:10px;color:#9CA3AF;margin-top:3px;">${n.time||""} Uhr</div>
+          </div>
+        </div>
+      </div>`;
+    }).join("");
+
+  // Update shopping mode if open
+  if(document.getElementById("shopMode").classList.contains("active")) renderShopMode();
+}
+
+window.addEventListener("load",initApp);
+</script>
+</body>
+</html>
