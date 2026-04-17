@@ -2,8 +2,7 @@ name: Flugblatt Aktionen prüfen
 
 on:
   schedule:
-    - cron: '0 2 * * 1'   # Jeden Montag 02:00 Uhr nachts
-    - cron: '0 2 * * 4'   # Jeden Donnerstag 02:00 Uhr nachts
+    - cron: '0 2 * * *'   # Täglich 02:00 Uhr nachts
   workflow_dispatch:        # Manuell auslösbar zum Testen
 
 jobs:

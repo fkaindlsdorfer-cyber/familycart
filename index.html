@@ -492,11 +492,8 @@ function submitEdit(){
 }
 
 // ── Deal search (Gemini + marktguru link) ──────────────────────────────────
-function mgUrl(name,storeName){
-  const q=encodeURIComponent(name);
-  // marktguru search with store filter if available
-  if(storeName) return`https://www.marktguru.at/angebote?q=${q}&retailer=${encodeURIComponent(storeName)}`;
-  return`https://www.marktguru.at/angebote?q=${q}`;
+function mgUrl(name){
+  return`https://www.marktguru.at/search/${encodeURIComponent((name||"").toLowerCase())}`;
 }
 
 function renderDealSearch(name,loading){
@@ -788,11 +785,25 @@ function render(){
   document.getElementById("tab-template").innerHTML=tmplHtml;
 
   // ── DEALS ──
-  document.getElementById("tab-deals").innerHTML=deals.length===0
-    ?`<div style="text-align:center;color:#9CA3AF;padding:44px 0;"><div style="font-size:40px;">🏷️</div><p style="margin-top:8px;">Keine aktuellen Aktionen</p><p style="font-size:12px;margin-top:4px;">Das Skript sucht Mo &amp; Do nachts automatisch</p><a href="https://www.marktguru.at/angebote" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;margin-top:16px;padding:11px 20px;background:#1C2B1A;color:white;text-decoration:none;border-radius:12px;font-size:13px;font-weight:700;">🌐 Auf marktguru.at suchen →</a></div>`
-    :deals.map(d=>{
+  const maximarktUploadSection=`
+    <div style="background:white;border-radius:16px;padding:14px 16px;box-shadow:0 2px 10px rgba(0,0,0,0.07);margin-bottom:14px;border:1.5px dashed #E5E7EB;">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px;">
+        <span style="font-size:22px;">🏪</span>
+        <div>
+          <div style="font-weight:700;font-size:14px;color:#111827;">Maximarkt Flugblatt hochladen</div>
+          <div style="font-size:11px;color:#6B7280;">PDF auswählen → Gemini sucht passende Angebote</div>
+        </div>
+      </div>
+      <button onclick="document.getElementById('maximarktPdfInput').click()" class="tap" style="width:100%;padding:11px;background:#FEE2E2;border:1.5px dashed #FECACA;border-radius:11px;font-size:13px;font-weight:700;color:#B91C1C;cursor:pointer;margin-bottom:0;">📄 Maximarkt Flugblatt (PDF) auswählen</button>
+      <input type="file" id="maximarktPdfInput" accept="application/pdf" style="display:none;" onchange="uploadMaximarktFlugblatt(this)">
+      <div id="maximarktStatus" style="margin-top:8px;"></div>
+    </div>`;
+
+  const dealsHtml = deals.length === 0
+    ? `<div style="text-align:center;color:#9CA3AF;padding:44px 0;"><div style="font-size:40px;">🏷️</div><p style="margin-top:8px;">Keine aktuellen Aktionen</p><p style="font-size:12px;margin-top:4px;">Das Skript sucht täglich nachts automatisch</p><a href="https://www.marktguru.at/angebote" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;margin-top:16px;padding:11px 20px;background:#1C2B1A;color:white;text-decoration:none;border-radius:12px;font-size:13px;font-weight:700;">🌐 Auf marktguru.at suchen →</a></div>`
+    : deals.map(d=>{
       const store=storeById(d.storeId);
-      const link=d.url||mgUrl(d.articleName||"",d.storeName||"");
+      const link=d.url||mgUrl(d.articleName||"");
       return `<div style="background:white;border-radius:15px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,0.06);margin-bottom:8px;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
           <div style="flex:1;">
@@ -809,6 +820,8 @@ function render(){
         </div>
       </div>`;
     }).join("");
+
+  document.getElementById("tab-deals").innerHTML=maximarktUploadSection+dealsHtml;
 
   // ── NOTIFS (fixed: filter by to===currentUser) ──
   document.getElementById("tab-notifs").innerHTML=notifs.length===0
@@ -828,6 +841,89 @@ function render(){
 
   // Update shopping mode if open
   if(document.getElementById("shopMode").classList.contains("active")) renderShopMode();
+}
+
+// ── Maximarkt Flugblatt PDF Upload ────────────────────────────────────────
+async function uploadMaximarktFlugblatt(input){
+  const file=input.files[0];
+  if(!file)return;
+  input.value="";
+  const apiKey=getApiKey();
+  const statusEl=document.getElementById("maximarktStatus");
+  if(!apiKey){
+    if(statusEl)statusEl.innerHTML=`<div style="font-size:12px;color:#EF4444;background:#FFF5F5;border-radius:9px;padding:9px 11px;">⚠️ Bitte zuerst Gemini API Key in ⚙️ hinterlegen.</div>`;
+    return;
+  }
+  if(statusEl)statusEl.innerHTML=`<div style="background:#1C2B1A;border-radius:11px;padding:11px 13px;display:flex;align-items:center;gap:9px;">
+    <span style="font-size:16px;">⏳</span>
+    <div style="font-size:12px;color:white;font-weight:600;">Flugblatt wird analysiert...</div>
+    ${[80,60,45].map(w=>`<div style="height:6px;width:${w}%;border-radius:3px;background:rgba(255,255,255,0.15);margin-top:5px;animation:pulse 1.2s ease-in-out infinite;"></div>`).join("")}
+  </div>`;
+
+  try{
+    // Read PDF as base64
+    const base64=await new Promise((res,rej)=>{
+      const reader=new FileReader();
+      reader.onload=e=>res(e.target.result.split(",")[1]);
+      reader.onerror=rej;
+      reader.readAsDataURL(file);
+    });
+
+    // Collect item names from /items and /template
+    const allNames=[
+      ...Object.values(state.items||{}).map(i=>i.name),
+      ...Object.values(state.template||{}).map(i=>i.name)
+    ].filter((v,i,a)=>v&&a.indexOf(v)===i);
+
+    const prompt=`Du bekommst ein Maximarkt Flugblatt als PDF. Prüfe welche der folgenden Artikel darin als Angebot/Aktion vorkommen: ${allNames.join(", ")}.
+Antworte NUR mit validem JSON ohne Markdown:
+{"deals":[{"articleName":"exakter Name aus Liste","storeName":"Maximarkt","price":"x,xx EUR","savings":"-xx%","validUntil":"TT.MM.JJJJ"}]}
+oder {"deals":[]}.`;
+
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,{
+      method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({
+        contents:[{parts:[
+          {inline_data:{mime_type:"application/pdf",data:base64}},
+          {text:prompt}
+        ]}],
+        generationConfig:{responseMimeType:"text/plain"}
+      })
+    });
+    const data=await res.json();
+    const text=(data.candidates?.[0]?.content?.parts||[]).map(p=>p.text||"").join("");
+    const m=text.match(/\{[\s\S]*\}/);
+    if(!m)throw new Error("Keine JSON-Antwort von Gemini");
+    const result=JSON.parse(m[0]);
+    const foundDeals=result.deals||[];
+
+    if(foundDeals.length===0){
+      if(statusEl)statusEl.innerHTML=`<div style="font-size:12px;color:#6B7280;background:#F9FAFB;border-radius:9px;padding:9px 11px;text-align:center;">🤷 Keine passenden Angebote im Flugblatt gefunden.</div>`;
+      return;
+    }
+
+    // Delete old Maximarkt deals first
+    const oldKeys=Object.entries(state.deals||{}).filter(([,v])=>v.storeName==="Maximarkt").map(([k])=>k);
+    await Promise.all(oldKeys.map(k=>db.ref("deals/"+k).remove()));
+
+    // Save new deals
+    await Promise.all(foundDeals.map(d=>{
+      const storeObj=STORES.find(s=>s.id==="maximarkt");
+      return db.ref("deals").push({
+        articleName:d.articleName,
+        storeName:"Maximarkt",
+        storeId:"maximarkt",
+        price:d.price||"",
+        savings:d.savings||"",
+        validUntil:d.validUntil||"",
+        url:""
+      });
+    }));
+
+    if(statusEl)statusEl.innerHTML=`<div style="font-size:12px;color:#16A34A;background:#F0FDF4;border-radius:9px;padding:9px 11px;font-weight:700;text-align:center;">✅ ${foundDeals.length} Angebot${foundDeals.length===1?"":"e"} aus dem Flugblatt gespeichert!</div>`;
+  }catch(e){
+    if(statusEl)statusEl.innerHTML=`<div style="font-size:12px;color:#EF4444;background:#FFF5F5;border-radius:9px;padding:9px 11px;">⚠️ Fehler: ${esc(e.message)}</div>`;
+  }
 }
 
 window.addEventListener("load",initApp);
