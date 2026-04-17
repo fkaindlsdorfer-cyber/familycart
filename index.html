@@ -875,26 +875,28 @@ async function uploadMaximarktFlugblatt(input){
       ...Object.values(state.template||{}).map(i=>i.name)
     ].filter((v,i,a)=>v&&a.indexOf(v)===i);
 
-    const prompt=`Du bekommst ein Maximarkt Flugblatt als PDF. Prüfe welche der folgenden Artikel darin als Angebot/Aktion vorkommen: ${allNames.join(", ")}.
-Antworte NUR mit validem JSON ohne Markdown:
-{"deals":[{"articleName":"exakter Name aus Liste","storeName":"Maximarkt","price":"x,xx EUR","savings":"-xx%","validUntil":"TT.MM.JJJJ"}]}
-oder {"deals":[]}.`;
+    const prompt=`Analysiere dieses Maximarkt Flugblatt PDF. Welche dieser Artikel sind darin als Angebot oder Aktion: ${allNames.join(", ")}.\nAntworte AUSSCHLIESSLICH mit reinem JSON. Kein Markdown, keine Backticks, keine Code-Blöcke, keine Erklärung. Nur das rohe JSON-Objekt:\n{"deals":[{"articleName":"exakter Artikelname aus der Liste","price":"1,99 EUR","savings":"-20%","validUntil":"20.04.2026"}]}\nFalls keine passenden Artikel gefunden wurden: {"deals":[]}`;
 
     const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,{
       method:"POST",headers:{"content-type":"application/json"},
       body:JSON.stringify({
         contents:[{parts:[
-          {inline_data:{mime_type:"application/pdf",data:base64}},
+          {inlineData:{mimeType:"application/pdf",data:base64}},
           {text:prompt}
         ]}],
-        generationConfig:{responseMimeType:"text/plain"}
+        generationConfig:{responseMimeType:"application/json"}
       })
     });
     const data=await res.json();
-    const text=(data.candidates?.[0]?.content?.parts||[]).map(p=>p.text||"").join("");
-    const m=text.match(/\{[\s\S]*\}/);
-    if(!m)throw new Error("Keine JSON-Antwort von Gemini");
-    const result=JSON.parse(m[0]);
+    const rawText=(data.candidates?.[0]?.content?.parts||[]).map(p=>p.text||"").join("");
+    let result;
+    try{
+      result=JSON.parse(rawText);
+    }catch(_){
+      const m=rawText.match(/\{[\s\S]*\}/);
+      if(!m)throw new Error("Keine JSON-Antwort von Gemini. Rohantwort: "+rawText.slice(0,400));
+      try{result=JSON.parse(m[0]);}catch(e2){throw new Error("Ungültiges JSON. Rohantwort: "+rawText.slice(0,400));}
+    }
     const foundDeals=result.deals||[];
 
     if(foundDeals.length===0){
