@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/firebase@10.12.0/firebase-app-compat.js"></script>
 <script src="https://unpkg.com/firebase@10.12.0/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 body{font-family:'DM Sans',sans-serif;background:#FAFAF7;max-width:430px;margin:0 auto;min-height:100vh;overflow-x:hidden;}
@@ -848,82 +849,105 @@ async function uploadMaximarktFlugblatt(input){
   const file=input.files[0];
   if(!file)return;
   input.value="";
-  const apiKey=getApiKey();
+  const apiKey=localStorage.getItem("fc_gemini")||"";
   const statusEl=document.getElementById("maximarktStatus");
+  console.log("[Maximarkt] PDF Upload gestartet:", file.name, "API Key vorhanden:", !!apiKey);
   if(!apiKey){
     if(statusEl)statusEl.innerHTML=`<div style="font-size:12px;color:#EF4444;background:#FFF5F5;border-radius:9px;padding:9px 11px;">⚠️ Bitte zuerst Gemini API Key in ⚙️ hinterlegen.</div>`;
     return;
   }
-  if(statusEl)statusEl.innerHTML=`<div style="background:#1C2B1A;border-radius:11px;padding:11px 13px;display:flex;align-items:center;gap:9px;">
-    <span style="font-size:16px;">⏳</span>
-    <div style="font-size:12px;color:white;font-weight:600;">Flugblatt wird analysiert...</div>
-    ${[80,60,45].map(w=>`<div style="height:6px;width:${w}%;border-radius:3px;background:rgba(255,255,255,0.15);margin-top:5px;animation:pulse 1.2s ease-in-out infinite;"></div>`).join("")}
+  if(statusEl)statusEl.innerHTML=`<div style="background:#1C2B1A;border-radius:11px;padding:11px 13px;">
+    <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px;"><span style="font-size:16px;">📄</span><div style="font-size:12px;color:white;font-weight:600;">PDF wird gelesen...</div></div>
+    ${[80,60,45].map(w=>`<div style="height:6px;width:${w}%;border-radius:3px;background:rgba(255,255,255,0.15);margin-bottom:4px;animation:pulse 1.2s ease-in-out infinite;"></div>`).join("")}
   </div>`;
 
   try{
-    // Read PDF as base64
-    const base64=await new Promise((res,rej)=>{
-      const reader=new FileReader();
-      reader.onload=e=>res(e.target.result.split(",")[1]);
-      reader.onerror=rej;
-      reader.readAsDataURL(file);
-    });
+    // Step 1: Extract text from PDF using PDF.js
+    console.log("[Maximarkt] Schritt 1: PDF Text-Extraktion via PDF.js");
+    const arrayBuffer=await file.arrayBuffer();
+    pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    const pdfDoc=await pdfjsLib.getDocument({data:arrayBuffer}).promise;
+    console.log("[Maximarkt] PDF geladen, Seiten:", pdfDoc.numPages);
 
-    // Collect item names from /items and /template
+    let pdfText="";
+    for(let p=1;p<=pdfDoc.numPages;p++){
+      const page=await pdfDoc.getPage(p);
+      const content=await page.getTextContent();
+      pdfText+=content.items.map(it=>it.str).join(" ")+"\n";
+    }
+    console.log("[Maximarkt] Extrahierter Text (erste 300 Zeichen):", pdfText.slice(0,300));
+
+    if(!pdfText.trim()){
+      throw new Error("PDF enthält keinen lesbaren Text (möglicherweise ein Bild-PDF).");
+    }
+
+    // Step 2: Collect item names from Firebase
     const allNames=[
       ...Object.values(state.items||{}).map(i=>i.name),
       ...Object.values(state.template||{}).map(i=>i.name)
     ].filter((v,i,a)=>v&&a.indexOf(v)===i);
+    console.log("[Maximarkt] Artikel aus Firebase:", allNames);
 
-    const prompt=`Analysiere dieses Maximarkt Flugblatt PDF. Welche dieser Artikel sind darin als Angebot oder Aktion: ${allNames.join(", ")}.\nAntworte AUSSCHLIESSLICH mit reinem JSON. Kein Markdown, keine Backticks, keine Code-Blöcke, keine Erklärung. Nur das rohe JSON-Objekt:\n{"deals":[{"articleName":"exakter Artikelname aus der Liste","price":"1,99 EUR","savings":"-20%","validUntil":"20.04.2026"}]}\nFalls keine passenden Artikel gefunden wurden: {"deals":[]}`;
+    // Step 3: Update status to show Gemini is running
+    if(statusEl)statusEl.innerHTML=`<div style="background:#1C2B1A;border-radius:11px;padding:11px 13px;">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px;"><span style="font-size:16px;">🤖</span><div style="font-size:12px;color:white;font-weight:600;">Gemini analysiert Angebote...</div></div>
+      ${[80,60,45].map(w=>`<div style="height:6px;width:${w}%;border-radius:3px;background:rgba(255,255,255,0.15);margin-bottom:4px;animation:pulse 1.2s ease-in-out infinite;"></div>`).join("")}
+    </div>`;
 
+    // Step 4: Send extracted text to Gemini
+    const prompt=`Here is the text from a Maximarkt Flugblatt (Austrian supermarket flyer):\n\n${pdfText.slice(0,12000)}\n\nThe user wants to buy these items: ${allNames.join(", ")}.\n\nFind all products from the user's list that appear in the flyer with prices or discounts. Return ONLY valid JSON, no markdown, no backticks, no explanation:\n{"deals":[{"articleName":"exact name from user list","price":"1,99 EUR","savings":"-20%","validUntil":"20.04.2026"}]}\nIf nothing found: {"deals":[]}`;
+
+    console.log("[Maximarkt] Sende Anfrage an Gemini API...");
     const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,{
       method:"POST",headers:{"content-type":"application/json"},
       body:JSON.stringify({
-        contents:[{parts:[
-          {inlineData:{mimeType:"application/pdf",data:base64}},
-          {text:prompt}
-        ]}],
+        contents:[{parts:[{text:prompt}]}],
         generationConfig:{responseMimeType:"application/json"}
       })
     });
     const data=await res.json();
+    console.log("[Maximarkt] Gemini API Antwort (vollständig):", JSON.stringify(data));
+
     const rawText=(data.candidates?.[0]?.content?.parts||[]).map(p=>p.text||"").join("");
+    console.log("[Maximarkt] Extrahierter Text aus Antwort:", rawText);
+
+    if(data.error){
+      throw new Error("Gemini API Fehler: "+data.error.message);
+    }
+
     let result;
     try{
       result=JSON.parse(rawText);
     }catch(_){
       const m=rawText.match(/\{[\s\S]*\}/);
       if(!m)throw new Error("Keine JSON-Antwort von Gemini. Rohantwort: "+rawText.slice(0,400));
-      try{result=JSON.parse(m[0]);}catch(e2){throw new Error("Ungültiges JSON. Rohantwort: "+rawText.slice(0,400));}
+      try{result=JSON.parse(m[0]);}catch(e2){throw new Error("Ungültiges JSON von Gemini. Rohantwort: "+rawText.slice(0,400));}
     }
     const foundDeals=result.deals||[];
+    console.log("[Maximarkt] Gefundene Deals:", foundDeals);
 
     if(foundDeals.length===0){
       if(statusEl)statusEl.innerHTML=`<div style="font-size:12px;color:#6B7280;background:#F9FAFB;border-radius:9px;padding:9px 11px;text-align:center;">🤷 Keine passenden Angebote im Flugblatt gefunden.</div>`;
       return;
     }
 
-    // Delete old Maximarkt deals first
+    // Delete old Maximarkt deals, save new ones
     const oldKeys=Object.entries(state.deals||{}).filter(([,v])=>v.storeName==="Maximarkt").map(([k])=>k);
     await Promise.all(oldKeys.map(k=>db.ref("deals/"+k).remove()));
+    await Promise.all(foundDeals.map(d=>db.ref("deals").push({
+      articleName:d.articleName,
+      storeName:"Maximarkt",
+      storeId:"maximarkt",
+      price:d.price||"",
+      savings:d.savings||"",
+      validUntil:d.validUntil||"",
+      url:""
+    })));
 
-    // Save new deals
-    await Promise.all(foundDeals.map(d=>{
-      const storeObj=STORES.find(s=>s.id==="maximarkt");
-      return db.ref("deals").push({
-        articleName:d.articleName,
-        storeName:"Maximarkt",
-        storeId:"maximarkt",
-        price:d.price||"",
-        savings:d.savings||"",
-        validUntil:d.validUntil||"",
-        url:""
-      });
-    }));
-
+    console.log("[Maximarkt]", foundDeals.length, "Deals in Firebase gespeichert.");
     if(statusEl)statusEl.innerHTML=`<div style="font-size:12px;color:#16A34A;background:#F0FDF4;border-radius:9px;padding:9px 11px;font-weight:700;text-align:center;">✅ ${foundDeals.length} Angebot${foundDeals.length===1?"":"e"} aus dem Flugblatt gespeichert!</div>`;
   }catch(e){
+    console.error("[Maximarkt] Fehler:", e);
     if(statusEl)statusEl.innerHTML=`<div style="font-size:12px;color:#EF4444;background:#FFF5F5;border-radius:9px;padding:9px 11px;">⚠️ Fehler: ${esc(e.message)}</div>`;
   }
 }
