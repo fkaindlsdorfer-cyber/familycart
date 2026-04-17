@@ -869,12 +869,14 @@ async function uploadMaximarktFlugblatt(input){
     const pdfDoc=await pdfjsLib.getDocument({data:arrayBuffer}).promise;
     console.log("[Maximarkt] PDF geladen, Seiten:", pdfDoc.numPages);
 
+    const maxPages=Math.min(pdfDoc.numPages,10);
     let pdfText="";
-    for(let p=1;p<=pdfDoc.numPages;p++){
+    for(let p=1;p<=maxPages;p++){
       const page=await pdfDoc.getPage(p);
       const content=await page.getTextContent();
       pdfText+=content.items.map(it=>it.str).join(" ")+"\n";
     }
+    pdfText=pdfText.slice(0,6000);
     console.log("[Maximarkt] Extrahierter Text (erste 300 Zeichen):", pdfText.slice(0,300));
 
     if(!pdfText.trim()){
@@ -894,17 +896,36 @@ async function uploadMaximarktFlugblatt(input){
       ${[80,60,45].map(w=>`<div style="height:6px;width:${w}%;border-radius:3px;background:rgba(255,255,255,0.15);margin-bottom:4px;animation:pulse 1.2s ease-in-out infinite;"></div>`).join("")}
     </div>`;
 
-    // Step 4: Send extracted text to Gemini
-    const prompt=`Here is the text from a Maximarkt Flugblatt (Austrian supermarket flyer):\n\n${pdfText.slice(0,12000)}\n\nThe user wants to buy these items: ${allNames.join(", ")}.\n\nFind all products from the user's list that appear in the flyer with prices or discounts. Return ONLY valid JSON, no markdown, no backticks, no explanation:\n{"deals":[{"articleName":"exact name from user list","price":"1,99 EUR","savings":"-20%","validUntil":"20.04.2026"}]}\nIf nothing found: {"deals":[]}`;
+    // Step 4: Build compact prompt and call Gemini with retry on 429
+    const itemList=allNames.slice(0,50).join(", ");
+    const prompt=`Maximarkt Flugblatt-Text:\n${pdfText}\n\nGesuchte Artikel: ${itemList}\n\nWelche Artikel sind im Flugblatt mit Preis/Rabatt? Antworte NUR mit JSON:\n{"deals":[{"articleName":"Name","price":"1,99 EUR","savings":"-20%","validUntil":"20.04.2026"}]}\nKeine Treffer: {"deals":[]}`;
+    console.log("[Maximarkt] Prompt-Länge:", prompt.length, "Zeichen");
+
+    const callGemini=async()=>{
+      const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,{
+        method:"POST",headers:{"content-type":"application/json"},
+        body:JSON.stringify({
+          contents:[{parts:[{text:prompt}]}],
+          generationConfig:{responseMimeType:"application/json"}
+        })
+      });
+      return r;
+    };
 
     console.log("[Maximarkt] Sende Anfrage an Gemini API...");
-    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,{
-      method:"POST",headers:{"content-type":"application/json"},
-      body:JSON.stringify({
-        contents:[{parts:[{text:prompt}]}],
-        generationConfig:{responseMimeType:"application/json"}
-      })
-    });
+    let res=await callGemini();
+    if(res.status===429){
+      console.log("[Maximarkt] Rate limit (429) – warte 10 Sekunden und versuche nochmal...");
+      if(statusEl)statusEl.innerHTML=`<div style="background:#1C2B1A;border-radius:11px;padding:11px 13px;">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px;"><span style="font-size:16px;">⏳</span><div style="font-size:12px;color:white;font-weight:600;">Rate Limit – warte 10 Sekunden...</div></div>
+      </div>`;
+      await new Promise(r=>setTimeout(r,10000));
+      res=await callGemini();
+    }
+    if(res.status===429){
+      throw new Error("Zu viele Anfragen – bitte 1 Minute warten und nochmal versuchen.");
+    }
+
     const data=await res.json();
     console.log("[Maximarkt] Gemini API Antwort (vollständig):", JSON.stringify(data));
 
@@ -912,7 +933,11 @@ async function uploadMaximarktFlugblatt(input){
     console.log("[Maximarkt] Extrahierter Text aus Antwort:", rawText);
 
     if(data.error){
-      throw new Error("Gemini API Fehler: "+data.error.message);
+      const msg=data.error.message||"";
+      if(data.error.code===429||msg.includes("quota")||msg.includes("RESOURCE_EXHAUSTED")){
+        throw new Error("Zu viele Anfragen – bitte 1 Minute warten und nochmal versuchen.");
+      }
+      throw new Error("Gemini API Fehler: "+msg);
     }
 
     let result;
