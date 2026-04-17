@@ -906,7 +906,7 @@ async function uploadMaximarktFlugblatt(input){
         method:"POST",headers:{"content-type":"application/json"},
         body:JSON.stringify({
           contents:[{parts:[{text:prompt}]}],
-          generationConfig:{responseMimeType:"application/json"}
+          generationConfig:{temperature:0,maxOutputTokens:1000}
         })
       });
       return r;
