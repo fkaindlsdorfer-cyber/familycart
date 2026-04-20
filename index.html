@@ -60,12 +60,6 @@ input,select,textarea,button{font-family:'DM Sans',sans-serif;}
     <h2 style="font-family:'Playfair Display',serif;font-size:22px;color:#111827;margin-bottom:6px;">Einrichtung</h2>
     <p style="color:#6B7280;font-size:13px;">Firebase ist bereits konfiguriert – einfach speichern.</p>
   </div>
-  <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:13px;padding:13px;margin-bottom:18px;font-size:13px;color:#1e40af;">
-    <strong>Optional:</strong> Gemini API Key für automatische Aktionssuche<br>
-    <a href="https://aistudio.google.com/app/apikey" target="_blank" style="text-decoration:underline;">aistudio.google.com/app/apikey</a> → Create API Key (kostenlos)
-  </div>
-  <div style="font-size:10px;color:#6B7280;font-weight:600;margin-bottom:4px;">Gemini API Key (optional)</div>
-  <input type="password" id="apiKeyInput" class="inp" placeholder="AIza...">
   <button onclick="saveSetup()" class="btn-dark">💾 Speichern &amp; Starten</button>
   <button onclick="closeSetup()" class="btn-light">Schließen</button>
 </div>
@@ -274,8 +268,6 @@ function initApp(){
     // Eagerly fetch deals once so badges appear immediately before the real-time listener fires
     db.ref("deals").once("value").then(snap=>{if(Object.keys(state.deals).length===0){state.deals=snap.val()||{};render();}});
     document.getElementById("loginStatus").textContent="✅ Verbunden";
-    const savedKey=localStorage.getItem("fc_gemini")||"";
-    if(savedKey) document.getElementById("apiKeyInput").value=savedKey;
   }catch(e){
     document.getElementById("loginStatus").textContent="⚠️ "+e.message;
   }
@@ -285,8 +277,6 @@ function initApp(){
 function openSetup(){document.getElementById("setupScreen").style.display="block";}
 function closeSetup(){document.getElementById("setupScreen").style.display="none";}
 function saveSetup(){
-  const key=document.getElementById("apiKeyInput").value.trim();
-  if(key) localStorage.setItem("fc_gemini",key);
   localStorage.setItem("fc_cfg",JSON.stringify(FB_CFG));
   closeSetup();
   if(!firebase.apps.length) initApp();
@@ -340,7 +330,7 @@ document.addEventListener("visibilitychange",()=>{
 function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 function storeById(id){return STORES.find(s=>s.id===id)||null;}
 function closeModal(id){document.getElementById(id).style.display="none";}
-function getApiKey(){return localStorage.getItem("fc_gemini")||"";}
+const GEMINI_WORKER_URL="https://familycart-gemini-proxy.fkaindls.workers.dev";
 
 function switchTab(t){
   currentTab=t;
@@ -501,24 +491,18 @@ function renderDealSearch(name,loading){
   const area=document.getElementById("dealSearchArea");
   if(!area)return;
   const linkBtn=`<a href="${mgUrl(name)}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:11px 0;background:#1C2B1A;color:white;text-decoration:none;border-radius:10px;font-size:12px;font-weight:700;margin-top:8px;">🌐 Alle Details auf marktguru.at →</a>`;
-  const apiKey=getApiKey();
-  if(!apiKey){
-    area.innerHTML=`<div style="font-size:12px;color:#6B7280;background:#F9FAFB;border-radius:10px;padding:10px 12px;margin-top:10px;">Gemini API Key in ⚙️ hinterlegen für automatische Vorschau</div>${linkBtn}`;
-    return;
-  }
   area.innerHTML=`<button onclick="runDealSearch('${name.replace(/'/g,"\\'")}',this)" class="tap" style="width:100%;padding:11px 0;background:#EDE9FE;color:#6D28D9;border:none;border-radius:10px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:7px;margin-top:10px;">🔍 Aktionen suchen</button>${linkBtn}`;
 }
 
 async function runDealSearch(name,btn){
   const area=document.getElementById("dealSearchArea");if(!area)return;
-  const apiKey=getApiKey();
   const link=`<a href="${mgUrl(name)}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:11px 0;background:#1C2B1A;color:white;text-decoration:none;border-radius:10px;font-size:12px;font-weight:700;margin-top:8px;">🌐 Auf marktguru.at öffnen →</a>`;
   area.innerHTML=`<div style="background:#1C2B1A;border-radius:11px;padding:11px 13px;margin-top:10px;">
     <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;"><span style="font-size:14px;">🔍</span><span style="font-size:12px;color:white;font-weight:600;">Suche Aktionen...</span></div>
     ${[88,68,50].map(w=>`<div style="height:26px;width:${w}%;border-radius:6px;background:rgba(255,255,255,0.08);margin-bottom:6px;animation:pulse 1.2s ease-in-out infinite;"></div>`).join("")}
   </div>`;
   try{
-    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,{
+    const res=await fetch(GEMINI_WORKER_URL,{
       method:"POST",headers:{"content-type":"application/json"},
       body:JSON.stringify({
         contents:[{parts:[{text:`Suche aktuelle Angebote für "${name}" in österreichischen Supermärkten (SPAR, EUROSPAR, Hofer, BILLA, BILLA PLUS, Lidl, Penny, Maximarkt). Antworte NUR mit validem JSON ohne Markdown:\n{"found":true,"deals":[{"store":"Marktname","title":"Produkttitel","price":"1,99 EUR","savings":"-20%","until":"20.04.2026","url":"https://www.marktguru.at/..."}]}\noder {"found":false}. Maximal 3 Ergebnisse.`}]}],
@@ -849,13 +833,8 @@ async function uploadMaximarktFlugblatt(input){
   const file=input.files[0];
   if(!file)return;
   input.value="";
-  const apiKey=localStorage.getItem("fc_gemini")||"";
   const statusEl=document.getElementById("maximarktStatus");
-  console.log("[Maximarkt] PDF Upload gestartet:", file.name, "API Key vorhanden:", !!apiKey);
-  if(!apiKey){
-    if(statusEl)statusEl.innerHTML=`<div style="font-size:12px;color:#EF4444;background:#FFF5F5;border-radius:9px;padding:9px 11px;">⚠️ Bitte zuerst Gemini API Key in ⚙️ hinterlegen.</div>`;
-    return;
-  }
+  console.log("[Maximarkt] PDF Upload gestartet:", file.name);
   if(statusEl)statusEl.innerHTML=`<div style="background:#1C2B1A;border-radius:11px;padding:11px 13px;">
     <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px;"><span style="font-size:16px;">📄</span><div style="font-size:12px;color:white;font-weight:600;">PDF wird gelesen...</div></div>
     ${[80,60,45].map(w=>`<div style="height:6px;width:${w}%;border-radius:3px;background:rgba(255,255,255,0.15);margin-bottom:4px;animation:pulse 1.2s ease-in-out infinite;"></div>`).join("")}
@@ -902,7 +881,7 @@ async function uploadMaximarktFlugblatt(input){
     console.log("[Maximarkt] Prompt-Länge:", prompt.length, "Zeichen");
 
     const callGemini=async()=>{
-      const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,{
+      const r=await fetch(GEMINI_WORKER_URL,{
         method:"POST",headers:{"content-type":"application/json"},
         body:JSON.stringify({
           contents:[{parts:[{text:prompt}]}],
