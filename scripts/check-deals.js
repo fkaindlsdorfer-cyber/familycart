@@ -82,6 +82,9 @@ async function fetchMaximarktLeaflets() {
   const data = await res.json();
   const now  = Date.now();
 
+  if ((data.results || []).length > 0)
+    console.log("   🔍 Erstes Leaflet-Objekt:", JSON.stringify(data.results[0]));
+
   const active = (data.results || [])
     .map(r => ({
       id:        r.mainLeafletId || r.id,
