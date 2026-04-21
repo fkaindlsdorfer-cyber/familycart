@@ -57,9 +57,10 @@ input,select,textarea,button{font-family:'DM Sans',sans-serif;}
 <div id="setupScreen" style="display:none;position:fixed;inset:0;background:white;z-index:200;overflow-y:auto;padding:28px 20px 50px;">
   <div style="text-align:center;margin-bottom:24px;">
     <div style="font-size:48px;margin-bottom:8px;">⚙️</div>
-    <h2 style="font-family:'Playfair Display',serif;font-size:22px;color:#111827;margin-bottom:6px;">Einrichtung</h2>
+    <h2 style="font-family:'Playfair Display',serif;font-size:22px;color:#111827;margin-bottom:6px;">Einstellungen</h2>
     <p style="color:#6B7280;font-size:13px;">Firebase ist bereits konfiguriert – einfach speichern.</p>
   </div>
+  <div id="marketsSection" style="margin-bottom:20px;"></div>
   <button onclick="saveSetup()" class="btn-dark">💾 Speichern &amp; Starten</button>
   <button onclick="closeSetup()" class="btn-light">Schließen</button>
 </div>
@@ -227,15 +228,39 @@ input,select,textarea,button{font-family:'DM Sans',sans-serif;}
 <!-- ═══ SCRIPT ════════════════════════════════════════════════════════════ -->
 <script>
 const STORES=[
-  {id:"spar",      name:"SPAR",       color:"#00883A",emoji:"🌲"},
-  {id:"eurospar",  name:"EUROSPAR",   color:"#007A33",emoji:"🏬"},
-  {id:"interspar", name:"INTERSPAR",  color:"#005C29",emoji:"🏬"},
-  {id:"maximarkt", name:"Maximarkt",  color:"#E30613",emoji:"🏪"},
-  {id:"hofer",     name:"Hofer",      color:"#003DA5",emoji:"🏷️"},
-  {id:"billa",     name:"BILLA",      color:"#E2001A",emoji:"🛒"},
-  {id:"billaplus", name:"BILLA PLUS", color:"#C8002A",emoji:"🛍️"},
-  {id:"lidl",      name:"Lidl",       color:"#0050AA",emoji:"🔵"},
-  {id:"penny",     name:"PENNY",      color:"#CC0000",emoji:"🔴"},
+  {id:"spar",        name:"SPAR",       color:"#00883A",emoji:"🌲"},
+  {id:"eurospar",    name:"EUROSPAR",   color:"#007A33",emoji:"🌲"},
+  {id:"interspar",   name:"INTERSPAR",  color:"#005C29",emoji:"🌲"},
+  {id:"maximarkt",   name:"Maximarkt",  color:"#E30613",emoji:"🏪"},
+  {id:"hofer",       name:"Hofer",      color:"#003DA5",emoji:"🏷️"},
+  {id:"billa",       name:"BILLA",      color:"#E2001A",emoji:"🛒"},
+  {id:"billa-plus",  name:"BILLA PLUS", color:"#C8002A",emoji:"🛍️"},
+  {id:"lidl",        name:"Lidl",       color:"#0050AA",emoji:"🔵"},
+  {id:"penny",       name:"PENNY",      color:"#CC0000",emoji:"🔴"},
+  {id:"bipa",        name:"Bipa",       color:"#E91E8C",emoji:"💗"},
+  {id:"dm",          name:"dm",         color:"#E05B26",emoji:"🧡"},
+  {id:"obi",         name:"OBI",        color:"#FF6B00",emoji:"🟠"},
+];
+const MARKET_CATALOG=[
+  {id:"spar",       name:"Spar",       group:"spar",     icon:"🌲"},
+  {id:"eurospar",   name:"Eurospar",   group:"spar",     icon:"🌲"},
+  {id:"maximarkt",  name:"Maximarkt",  group:"spar",     icon:"🏪"},
+  {id:"interspar",  name:"Interspar",  group:"spar",     icon:"🌲"},
+  {id:"billa",      name:"Billa",      group:"rewe",     icon:"🛒"},
+  {id:"billa-plus", name:"Billa Plus", group:"rewe",     icon:"🛍️"},
+  {id:"hofer",      name:"Hofer",      group:"discount", icon:"🏷️"},
+  {id:"lidl",       name:"Lidl",       group:"discount", icon:"🔵"},
+  {id:"penny",      name:"Penny",      group:"discount", icon:"🔴"},
+  {id:"bipa",       name:"Bipa",       group:"drogerie", icon:"💗"},
+  {id:"dm",         name:"dm",         group:"drogerie", icon:"🧡"},
+  {id:"obi",        name:"Obi",        group:"baumarkt", icon:"🟠"},
+];
+const MARKET_GROUPS=[
+  {key:"spar",     label:"Spar-Gruppe"},
+  {key:"rewe",     label:"Rewe-Gruppe"},
+  {key:"discount", label:"Discounter"},
+  {key:"drogerie", label:"Drogerie"},
+  {key:"baumarkt", label:"Baumarkt"},
 ];
 const CATS=["🥦 Obst & Gemüse","🥩 Fleisch & Fisch","🧀 Milchprodukte","🍞 Backwaren","🧴 Hygiene","🥫 Vorrat","🍷 Getränke","❓ Sonstiges"];
 const USERS={du:{name:"Flo",emoji:"🧑",color:"#3b82f6"},frau:{name:"Vicy",emoji:"👩",color:"#ec4899"}};
@@ -251,6 +276,7 @@ const FB_CFG={
 
 let db=null, currentUser=null, currentTab="list", addTarget="list", listSort="default";
 let state={items:{},template:{},deals:{},notifications:{}};
+let activeMarkets=null; // null = loading, array = loaded from /settings/activeMarkets
 let storePickerCallback=null;
 let dealRefreshTimer=null;
 let lastDealRefresh=0;
@@ -265,6 +291,16 @@ function initApp(){
     ["items","template","deals","notifications"].forEach(k=>{
       db.ref(k).on("value",snap=>{state[k]=snap.val()||{};render();});
     });
+    db.ref("settings/activeMarkets").on("value",snap=>{
+      const val=snap.val();
+      activeMarkets=Array.isArray(val)?val:["hofer","lidl","eurospar","maximarkt"];
+      render();
+      if(document.getElementById("setupScreen").style.display!=="none") renderMarketsSettings();
+    },err=>{
+      console.warn("settings/activeMarkets read error:",err.message,"– using defaults");
+      activeMarkets=["hofer","lidl","eurospar","maximarkt"];
+      if(document.getElementById("setupScreen").style.display!=="none") renderMarketsSettings();
+    });
     // Eagerly fetch deals once so badges appear immediately before the real-time listener fires
     db.ref("deals").once("value").then(snap=>{if(Object.keys(state.deals).length===0){state.deals=snap.val()||{};render();}});
     document.getElementById("loginStatus").textContent="✅ Verbunden";
@@ -274,13 +310,51 @@ function initApp(){
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────
-function openSetup(){document.getElementById("setupScreen").style.display="block";}
+function openSetup(){document.getElementById("setupScreen").style.display="block";renderMarketsSettings();}
 function closeSetup(){document.getElementById("setupScreen").style.display="none";}
 function saveSetup(){
   localStorage.setItem("fc_cfg",JSON.stringify(FB_CFG));
   closeSetup();
   if(!firebase.apps.length) initApp();
   else document.getElementById("loginStatus").textContent="✅ Firebase verbunden";
+}
+
+// ── Market Settings ───────────────────────────────────────────────────────
+function renderMarketsSettings(){
+  const el=document.getElementById("marketsSection");
+  if(!el)return;
+  if(activeMarkets===null){
+    el.innerHTML=`<div style="border-top:1px solid #F3F4F6;padding:16px 0;text-align:center;color:#9CA3AF;font-size:13px;">Märkte werden geladen...</div>`;
+    return;
+  }
+  let html=`<div style="border-top:1px solid #F3F4F6;padding-top:20px;">
+    <div style="font-weight:700;font-size:16px;color:#111827;margin-bottom:4px;">🏪 Meine Märkte</div>
+    <div style="font-size:12px;color:#6B7280;margin-bottom:16px;">Neu aktivierte Märkte erscheinen nach dem nächsten nächtlichen Run</div>`;
+  MARKET_GROUPS.forEach(g=>{
+    const markets=MARKET_CATALOG.filter(m=>m.group===g.key);
+    if(!markets.length)return;
+    html+=`<div style="margin-bottom:14px;"><div style="font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#9CA3AF;margin-bottom:8px;">${g.label}</div>`;
+    markets.forEach(m=>{
+      const active=activeMarkets.includes(m.id);
+      html+=`<label style="display:flex;align-items:center;gap:10px;padding:11px 13px;background:${active?"#F0FDF4":"#F9FAFB"};border-radius:12px;margin-bottom:6px;cursor:pointer;border:1.5px solid ${active?"#86EFAC":"#E5E7EB"};">
+        <input type="checkbox" onchange="toggleMarket('${m.id}',this.checked)" ${active?"checked":""} style="width:18px;height:18px;accent-color:#1C2B1A;cursor:pointer;flex-shrink:0;">
+        <span style="font-size:20px;">${m.icon}</span>
+        <span style="font-weight:600;font-size:14px;color:#111827;">${esc(m.name)}</span>
+      </label>`;
+    });
+    html+=`</div>`;
+  });
+  html+=`</div>`;
+  el.innerHTML=html;
+}
+function toggleMarket(marketId,checked){
+  if(activeMarkets===null||!db)return;
+  let updated=activeMarkets.filter(id=>id!==marketId);
+  if(checked)updated.push(marketId);
+  activeMarkets=updated;
+  db.ref("settings/activeMarkets").set(updated);
+  renderMarketsSettings();
+  render();
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────
@@ -617,7 +691,8 @@ function render(){
   populateSelects();
   const items=Object.entries(state.items||{}).map(([k,v])=>({...v,fbKey:k})).sort((a,b)=>b.id-a.id);
   const tmpl=Object.entries(state.template||{}).map(([k,v])=>({...v,fbKey:k})).sort((a,b)=>b.id-a.id);
-  const deals=Object.entries(state.deals||{}).map(([k,v])=>({...v,fbKey:k}));
+  const allDeals=Object.entries(state.deals||{}).map(([k,v])=>({...v,fbKey:k}));
+  const deals=activeMarkets===null?allDeals:allDeals.filter(d=>activeMarkets.includes(d.storeId));
   // Fix: filter notifications FOR the current user only
   const notifs=Object.entries(state.notifications||{}).map(([k,v])=>({...v,fbKey:k}))
     .filter(n=>n.to===currentUser)
@@ -784,7 +859,9 @@ function render(){
       <div id="maximarktStatus" style="margin-top:8px;"></div>
     </div>`;
 
-  const dealsHtml = deals.length === 0
+  const dealsHtml = activeMarkets===null
+    ? [80,60,72,50,65].map(w=>`<div style="background:white;border-radius:15px;padding:14px;margin-bottom:8px;"><div style="height:14px;width:${w}%;background:#F3F4F6;border-radius:6px;animation:pulse 1.2s ease-in-out infinite;"></div><div style="height:10px;width:40%;background:#F3F4F6;border-radius:6px;margin-top:10px;animation:pulse 1.2s ease-in-out infinite;"></div></div>`).join("")
+    : deals.length === 0
     ? `<div style="text-align:center;color:#9CA3AF;padding:44px 0;"><div style="font-size:40px;">🏷️</div><p style="margin-top:8px;">Keine aktuellen Aktionen</p><p style="font-size:12px;margin-top:4px;">Das Skript sucht täglich nachts automatisch</p><a href="https://www.marktguru.at/angebote" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;margin-top:16px;padding:11px 20px;background:#1C2B1A;color:white;text-decoration:none;border-radius:12px;font-size:13px;font-weight:700;">🌐 Auf marktguru.at suchen →</a></div>`
     : deals.map(d=>{
       const store=storeById(d.storeId);

@@ -18,6 +18,7 @@ const FIREBASE_DB_URL  = process.env.FIREBASE_DATABASE_URL;
 const FIREBASE_SERVICE = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 const GEMINI_API_KEY   = process.env.GEMINI_API_KEY;
 const ZIP_CODE         = "5204"; // Strasswalchen
+const MAXIMARKT_ZIP    = "4910"; // Ried im Innkreis – 4.4 km zur nächsten Maximarkt-Filiale
 const TMP_DIR          = "/tmp/familycart";
 
 initializeApp({ credential: cert(FIREBASE_SERVICE), databaseURL: FIREBASE_DB_URL });
@@ -25,16 +26,20 @@ const db = getDatabase();
 
 function normalizeStore(name) {
   const n = (name || "").toLowerCase();
+  console.log(`[normalizeStore] input="${name}" → lowered="${n}"`);
   if (n.includes("interspar"))              return "interspar";
   if (n.includes("eurospar"))               return "eurospar";
   if (n.includes("spar"))                   return "spar";
   if (n.includes("hofer") || n.includes("aldi")) return "hofer";
-  if (n.includes("billa plus") || n.includes("billa+")) return "billaplus";
+  if (n.includes("billa plus") || n.includes("billa+")) return "billa-plus";
   if (n.includes("billa"))                  return "billa";
   if (n.includes("maximarkt"))              return "maximarkt";
   if (n.includes("lidl"))                   return "lidl";
   if (n.includes("penny"))                  return "penny";
-  return name;
+  if (n.includes("bipa"))                   return "bipa";
+  if (n.includes("dm drogerie") || n.trim() === "dm") return "dm";
+  if (n.includes("obi"))                    return "obi";
+  return n; // unknown store: at least return lowercase
 }
 
 async function downloadMaximarktFlugblatt() {
@@ -164,11 +169,21 @@ async function main() {
   console.log(`📍 PLZ: ${ZIP_CODE}`);
   console.log("═══════════════════════════════════════════════════\n");
 
-  // Artikel aus Firebase laden
-  const [itemsSnap, templateSnap] = await Promise.all([
+  // Aktive Märkte + Artikel aus Firebase laden
+  const [itemsSnap, templateSnap, settingsSnap] = await Promise.all([
     db.ref("items").get(),
     db.ref("template").get(),
+    db.ref("settings/activeMarkets").get(),
   ]);
+
+  let activeMarkets = settingsSnap.val();
+  console.log("[DEBUG] settingsSnap.val():", JSON.stringify(settingsSnap.val()));
+  if (!Array.isArray(activeMarkets) || activeMarkets.length === 0) {
+    console.warn("⚠️  activeMarkets not set, falling back to defaults");
+    activeMarkets = ["hofer", "lidl", "eurospar", "maximarkt"];
+  }
+  console.log("[DEBUG] activeMarkets nach fallback:", JSON.stringify(activeMarkets));
+  console.log(`🏪 Aktive Märkte: ${activeMarkets.join(", ")}\n`);
 
   const allItems = [
     ...Object.values(itemsSnap.val()    || {}),
@@ -207,6 +222,7 @@ async function main() {
         for (const offer of results) {
           const storeName  = offer.advertisers?.[0]?.name || "Unbekannt";
           const storeId    = normalizeStore(storeName);
+          if (!activeMarkets.includes(storeId)) continue;
           const price      = offer.price     ? `${offer.price} EUR`    : null;
           const oldPrice   = offer.oldPrice  ? `${offer.oldPrice} EUR` : null;
           const savings    = (offer.price && offer.oldPrice)
@@ -231,6 +247,47 @@ async function main() {
     }
 
     await sleep(300);
+
+    // Maximarkt-Zusatz-Call mit Ried-PLZ (Marktguru filtert regional, Strasswalchen zu weit)
+    if (activeMarkets.includes("maximarkt")) {
+      try {
+        console.log(`   🛒 Maximarkt-Suche (PLZ ${MAXIMARKT_ZIP}): "${article.name}"`);
+        const mxResults = await search(article.name, { limit: 10, zipCode: MAXIMARKT_ZIP });
+
+        // Debug dump für "Bier" – rohe Antwort zum Prüfen des Advertiser-Namens
+        if (article.name.toLowerCase() === "bier") {
+          console.log("[DEBUG] Rohes Marktguru-Ergebnis für Bier @ 4910:", JSON.stringify(mxResults, null, 2));
+        }
+
+        const mxHits = (mxResults || []).filter(o =>
+          normalizeStore(o.advertisers?.[0]?.name) === "maximarkt"
+        );
+        console.log(`      → ${mxHits.length} Maximarkt-Treffer`);
+
+        mxHits.forEach(offer => {
+          const storeName  = offer.advertisers?.[0]?.name || "Maximarkt";
+          const price      = offer.price    ? `${offer.price} EUR`    : null;
+          const oldPrice   = offer.oldPrice ? `${offer.oldPrice} EUR` : null;
+          const savings    = (offer.price && offer.oldPrice)
+            ? `-${(offer.oldPrice - offer.price).toFixed(2)} EUR` : null;
+          const validUntil = offer.validityDates?.[0]?.to?.slice(0,10) || null;
+
+          console.log(`      🏪 ${storeName}: ${offer.description || article.name} – ${price || "?"}`);
+
+          allDeals.push({
+            articleName: article.name,
+            storeId: "maximarkt", storeName,
+            title:   offer.description || article.name,
+            price, oldPrice, savings, validUntil,
+            source:  "marktguru.at",
+            checkedAt,
+          });
+        });
+      } catch (e) {
+        console.error(`   ⚠️  Maximarkt-Fehler: ${e.message}\n`);
+      }
+      await sleep(300);
+    }
   }
 
   // Duplikate entfernen
@@ -260,11 +317,15 @@ async function main() {
   }
 
   // Maximarkt PDF processing
-  try {
-    const pdfPath = await downloadMaximarktFlugblatt();
-    if (pdfPath) await processMaximarktPDF(pdfPath, articles);
-  } catch (e) {
-    console.error(`⚠️  Maximarkt PDF Fehler: ${e.message}`);
+  if (activeMarkets.includes("maximarkt")) {
+    try {
+      const pdfPath = await downloadMaximarktFlugblatt();
+      if (pdfPath) await processMaximarktPDF(pdfPath, articles);
+    } catch (e) {
+      console.error(`⚠️  Maximarkt PDF Fehler: ${e.message}`);
+    }
+  } else {
+    console.log("\n⏭️  Maximarkt nicht aktiv – PDF-Verarbeitung übersprungen.");
   }
 
   console.log("\n═══════════════════════════════════════════════════");
@@ -272,4 +333,6 @@ async function main() {
   console.log("═══════════════════════════════════════════════════");
 }
 
-main().catch(e => { console.error("❌ Fehler:", e.message); process.exit(1); });
+main()
+  .then(() => process.exit(0))
+  .catch(e => { console.error("❌ Fehler:", e.message); process.exit(1); });
