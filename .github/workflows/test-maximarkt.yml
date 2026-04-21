@@ -1,0 +1,26 @@
+name: Test Maximarkt API
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v4
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Pakete installieren
+        run: npm install
+        working-directory: ./scripts
+
+      - name: Maximarkt API Diagnostic
+        run: node test-maximarkt-api.js
+        working-directory: ./scripts
