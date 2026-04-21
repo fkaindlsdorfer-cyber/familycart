@@ -1,138 +1,223 @@
 /**
- * One-shot diagnostic: probes the marktguru.at API for Maximarkt data.
+ * Maximarkt API Diagnostic — Phase 2
+ * Tests 14 endpoint candidates to find which one returns ALL active Maximarkt leaflets.
  * Run via GitHub Actions workflow "Test Maximarkt API" (test-maximarkt.yml).
- *
  * Does NOT touch Firebase. Exits 0 regardless of results.
  */
 
-const sleep = ms => new Promise(r => setTimeout(r, ms));
+const sleep  = ms => new Promise(r => setTimeout(r, ms));
+const BASE   = "https://api.marktguru.at/api/v1";
+const RID    = 12776;   // Maximarkt retailer ID
+const LAT    = 48.2094;
+const LNG    = 13.4889;
+const ZIP    = 4910;
+const LOC    = `zipCode=${ZIP}&latitude=${LAT}&longitude=${LNG}`;
 
+// ── Auth ─────────────────────────────────────────────────────────────────────
 async function getApiKeys() {
   console.log("🔑 Hole API-Keys von marktguru.at...");
   const res = await fetch("https://marktguru.at", {
-    headers: { "User-Agent": "Mozilla/5.0 (compatible; mywagerl-test/1.0)" }
+    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
   });
   const html = await res.text();
-
-  // Package extracts the LAST matching <script type="application/json"> tag
   const regex = /<script\s+type="application\/json">([\s\S]*?)<\/script>/gm;
   let configStr = "";
   let m;
   while ((m = regex.exec(html)) !== null) configStr = m[1];
-
-  if (!configStr) throw new Error("Kein <script type=application/json> gefunden");
-
-  let parsed;
-  try { parsed = JSON.parse(configStr); } catch (e) {
-    throw new Error(`JSON-Parse-Fehler: ${e.message}. Raw (first 500): ${configStr.slice(0, 500)}`);
-  }
-
-  if (!parsed?.config?.apiKey) throw new Error("config.apiKey fehlt im gescrapten JSON");
-  console.log(`   ✅ apiKey: ${parsed.config.apiKey.slice(0, 8)}… clientKey: ${parsed.config.clientKey?.slice(0, 8)}…`);
+  if (!configStr) throw new Error("Kein <script type=application/json> auf marktguru.at gefunden");
+  const parsed = JSON.parse(configStr);
+  if (!parsed?.config?.apiKey) throw new Error("config.apiKey fehlt");
+  console.log(`   ✅ apiKey=${parsed.config.apiKey.slice(0,8)}… clientKey=${parsed.config.clientKey?.slice(0,8)}…\n`);
   return { apiKey: parsed.config.apiKey, clientKey: parsed.config.clientKey };
 }
 
-async function apiGet(headers, path) {
-  const url = `https://api.marktguru.at/api/v1${path}`;
-  console.log(`\n📡 GET ${url}`);
+// ── Generic GET helper ────────────────────────────────────────────────────────
+async function apiGet(headers, url, label) {
+  process.stdout.write(`[${label}] GET ${url}\n`);
   try {
     const res = await fetch(url, { headers });
-    const body = await res.text();
-    console.log(`   Status: ${res.status}`);
-    if (!res.ok) { console.log(`   Body (first 500): ${body.slice(0, 500)}`); return null; }
-    const data = JSON.parse(body);
-    return data;
+    const text = await res.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch (_) { /* not JSON */ }
+    const preview = text.slice(0, 500).replace(/\n/g, " ");
+    console.log(`   → ${res.status}  preview: ${preview}`);
+    return { status: res.status, data, text };
   } catch (e) {
-    console.log(`   ❌ Fehler: ${e.message}`);
-    return null;
+    console.log(`   → ERROR: ${e.message}`);
+    return { status: 0, data: null, text: "" };
   }
 }
 
-async function main() {
-  console.log("═══════════════════════════════════════════════════════");
-  console.log("🔬 Maximarkt API Diagnostic");
-  console.log("═══════════════════════════════════════════════════════\n");
+// ── Count array-like results ──────────────────────────────────────────────────
+function countResults(data) {
+  if (!data) return 0;
+  if (Array.isArray(data)) return data.length;
+  if (Array.isArray(data?.results)) return data.results.length;
+  if (Array.isArray(data?.leaflets)) return data.leaflets.length;
+  if (Array.isArray(data?.offers)) return data.offers.length;
+  if (Array.isArray(data?.data)) return data.data.length;
+  if (typeof data === "object") {
+    // single object that IS a leaflet?
+    if (data.id && (data.validFrom || data.pageCount)) return 1;
+  }
+  return "?";
+}
 
-  // ── 1. Get API keys ─────────────────────────────────────────────────────
+// ── Main ──────────────────────────────────────────────────────────────────────
+async function main() {
+  console.log("═══════════════════════════════════════════════════════════════");
+  console.log("🔬 Maximarkt API Diagnostic — Phase 2 (14 Kandidaten + HTML)");
+  console.log("═══════════════════════════════════════════════════════════════\n");
+
   const { apiKey, clientKey } = await getApiKeys();
-  const headers = {
-    "x-apikey":    apiKey,
-    "x-clientkey": clientKey,
-    "User-Agent":  "Mozilla/5.0 (compatible; mywagerl-test/1.0)",
+  const h = { "x-apikey": apiKey, "x-clientkey": clientKey,
+               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" };
+
+  const summary = []; // { label, url, status, count }
+
+  const test = async (label, url) => {
+    const r = await apiGet(h, url, label);
+    const count = countResults(r.data);
+    summary.push({ label, url, status: r.status, count });
+    await sleep(400);
+    return r;
   };
 
-  // ── 2. Find Maximarkt retailer via search endpoint ──────────────────────
-  console.log("\n══ STEP 1: Maximarkt via /retailers search ══");
-  const retailersSearch = await apiGet(headers, "/retailers?as=web&q=maximarkt&limit=10");
-  if (retailersSearch) {
-    console.log("   Results:", JSON.stringify(retailersSearch, null, 2).slice(0, 3000));
+  // ── Candidates 1–3: /offers/{retailerId}/... ─────────────────────────────
+  await test("01", `${BASE}/offers/${RID}/leaflets?${LOC}&as=mobiledetailed`);
+  await test("02", `${BASE}/offers/${RID}/bestleaflets?${LOC}&as=mobiledetailed`);
+  await test("03", `${BASE}/offers/${RID}/allleaflets?${LOC}&as=mobiledetailed`);
+
+  // ── Candidates 4–5: /retailers/{id}/leaflets ─────────────────────────────
+  await test("04", `${BASE}/retailers/${RID}/leaflets?${LOC}&as=mobiledetailed`);
+  await test("05", `${BASE}/retailers/${RID}/leaflets/current?${LOC}&as=mobiledetailed`);
+
+  // ── Candidate 6: /retailers/{id}/locations → extract locationId ──────────
+  const r6 = await test("06", `${BASE}/retailers/${RID}/locations?latitude=${LAT}&longitude=${LNG}&as=mobiledetailed`);
+  let locationId = null;
+  if (r6.data) {
+    const arr = Array.isArray(r6.data) ? r6.data
+              : Array.isArray(r6.data?.results) ? r6.data.results
+              : Array.isArray(r6.data?.locations) ? r6.data.locations
+              : r6.data?.id ? [r6.data] : [];
+    if (arr.length > 0) {
+      locationId = arr[0]?.id ?? arr[0]?.retailerLocationId ?? null;
+      console.log(`   📍 Erste Location: id=${locationId}  raw=${JSON.stringify(arr[0]).slice(0,200)}`);
+    } else {
+      console.log("   ⚠️  Keine Location-Einträge in Response");
+    }
   }
-  await sleep(500);
 
-  // ── 3. List retailers near PLZ 4910 ─────────────────────────────────────
-  console.log("\n══ STEP 2: /retailers list near PLZ 4910 ══");
-  const retailersZip = await apiGet(headers, "/retailers?as=web&zipCode=4910&limit=50");
-  if (retailersZip) {
-    // Look for Maximarkt specifically
-    const results = retailersZip?.results || retailersZip;
-    const arr = Array.isArray(results) ? results : (Array.isArray(retailersZip?.results) ? retailersZip.results : []);
-    const maxi = arr.filter(r => JSON.stringify(r).toLowerCase().includes("maximarkt"));
-    console.log(`   Total retailers: ${arr.length}, Maximarkt entries: ${maxi.length}`);
-    if (maxi.length) console.log("   Maximarkt:", JSON.stringify(maxi, null, 2));
-    else console.log("   First 3 retailers:", JSON.stringify(arr.slice(0, 3), null, 2).slice(0, 1000));
+  // ── Candidates 7–9: /retailerLocations/{id}/... (only if id found) ───────
+  if (locationId) {
+    await test("07", `${BASE}/retailerLocations/${locationId}/leaflets?as=mobiledetailed`);
+    await test("08", `${BASE}/retailerLocations/${locationId}/offers?as=mobiledetailed`);
+    await test("09", `${BASE}/retailerLocationOffers?retailerLocationId=${locationId}&as=mobiledetailed`);
+  } else {
+    console.log("[07–09] Übersprungen – keine locationId aus Kandidat 6\n");
+    summary.push({ label:"07", url:"(skipped – no locationId)", status:"-", count:"-" });
+    summary.push({ label:"08", url:"(skipped – no locationId)", status:"-", count:"-" });
+    summary.push({ label:"09", url:"(skipped – no locationId)", status:"-", count:"-" });
   }
-  await sleep(500);
 
-  // ── 4. Try known Maximarkt retailer ID 12776 ────────────────────────────
-  console.log("\n══ STEP 3: /retailers/12776 direct ══");
-  const maxi12776 = await apiGet(headers, "/retailers/12776?as=web");
-  if (maxi12776) console.log("   Result:", JSON.stringify(maxi12776, null, 2).slice(0, 2000));
-  await sleep(500);
+  // ── Candidates 10–11: /leaflets?retailerId=... ───────────────────────────
+  await test("10", `${BASE}/leaflets?retailerId=${RID}&${LOC}&as=mobiledetailed`);
+  await test("11", `${BASE}/leaflets/current?retailerId=${RID}&${LOC}`);
 
-  // ── 5. Leaflets for PLZ 4910 ─────────────────────────────────────────────
-  console.log("\n══ STEP 4: /leaflets near PLZ 4910 (all) ══");
-  const leaflets4910 = await apiGet(headers, "/leaflets?as=web&zipCode=4910&limit=50");
-  if (leaflets4910) {
-    const arr = Array.isArray(leaflets4910?.results) ? leaflets4910.results : (Array.isArray(leaflets4910) ? leaflets4910 : []);
-    const maxi = arr.filter(r => JSON.stringify(r).toLowerCase().includes("maximarkt"));
-    console.log(`   Total leaflets: ${arr.length}, Maximarkt leaflets: ${maxi.length}`);
-    if (maxi.length) console.log("   Maximarkt leaflets:", JSON.stringify(maxi, null, 2).slice(0, 3000));
-    else console.log("   First 3 leaflets:", JSON.stringify(arr.slice(0, 3), null, 2).slice(0, 1500));
+  // ── Candidates 12–13: /publishers/retailer/... ───────────────────────────
+  await test("12", `${BASE}/publishers/retailer/maximarkt/city/ried-im-innkreis/leaflets?as=mobile`);
+  await test("13", `${BASE}/publishers/retailer/maximarkt/city/ried-im-innkreis/prospekte?as=mobile`);
+
+  // ── Candidate 14: HTML scraping of /rp/maximarkt-prospekte ───────────────
+  console.log("\n[14] HTML-Scraping https://www.marktguru.at/rp/maximarkt-prospekte");
+  const leafletIdsFromHTML = new Set();
+  try {
+    const res = await fetch("https://www.marktguru.at/rp/maximarkt-prospekte", {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                 "Accept-Language": "de-AT,de;q=0.9" }
+    });
+    const html = await res.text();
+    console.log(`   → HTTP ${res.status}, HTML length: ${html.length}`);
+
+    // Pattern: /leaflets/123456 or leaflet-id="123456" or data-id="123456" or "leafletId":123456
+    const patterns = [
+      /\/leaflets\/(\d+)/g,
+      /leaflet[-_]?id[=":]+\s*"?(\d+)/gi,
+      /"leafletId"\s*:\s*(\d+)/g,
+      /data-leaflet[=-]id="(\d+)"/gi,
+      /"id"\s*:\s*(\d+).*?maximarkt/gi,
+    ];
+    for (const pat of patterns) {
+      let m2;
+      const re = new RegExp(pat.source, pat.flags);
+      while ((m2 = re.exec(html)) !== null) leafletIdsFromHTML.add(m2[1]);
+    }
+
+    // Also look for Next.js __NEXT_DATA__
+    const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
+    if (nextDataMatch) {
+      console.log("   📦 __NEXT_DATA__ gefunden – suche nach leaflet IDs...");
+      const nd = nextDataMatch[1];
+      const idRe = /"id"\s*:\s*(\d{5,8})/g;
+      let nm;
+      while ((nm = idRe.exec(nd)) !== null) leafletIdsFromHTML.add(nm[1]);
+      // Show first 1000 chars of Next data for context
+      console.log(`   __NEXT_DATA__ (first 1000): ${nd.slice(0, 1000)}`);
+    }
+
+    if (leafletIdsFromHTML.size > 0) {
+      console.log(`   ✅ Gefundene Leaflet-IDs: ${[...leafletIdsFromHTML].join(", ")}`);
+    } else {
+      console.log("   ⚠️  Keine Leaflet-IDs im HTML gefunden");
+      // Dump first 2000 chars to help debug
+      console.log(`   HTML preview (first 2000): ${html.slice(0, 2000)}`);
+    }
+    summary.push({ label:"14", url:"HTML /rp/maximarkt-prospekte", status: res.status,
+                   count: leafletIdsFromHTML.size > 0 ? `${leafletIdsFromHTML.size} IDs` : 0 });
+  } catch (e) {
+    console.log(`   ❌ Fehler: ${e.message}`);
+    summary.push({ label:"14", url:"HTML /rp/maximarkt-prospekte", status:"ERR", count:0 });
   }
-  await sleep(500);
 
-  // ── 6. Leaflets directly for retailer 12776 ─────────────────────────────
-  console.log("\n══ STEP 5: /retailers/12776/leaflets?zipCode=4910 ══");
-  const maxiLeaflets = await apiGet(headers, "/retailers/12776/leaflets?as=web&zipCode=4910&limit=10");
-  if (maxiLeaflets) console.log("   Result:", JSON.stringify(maxiLeaflets, null, 2).slice(0, 3000));
-  await sleep(500);
-
-  // ── 7. Offers directly for retailer 12776 ───────────────────────────────
-  console.log("\n══ STEP 6: /retailers/12776/offers?zipCode=4910 ══");
-  const maxiOffers = await apiGet(headers, "/retailers/12776/offers?as=web&zipCode=4910&limit=10");
-  if (maxiOffers) console.log("   Result:", JSON.stringify(maxiOffers, null, 2).slice(0, 3000));
-  await sleep(500);
-
-  // ── 8. Try offers/search with allowedRetailers=maximarkt ────────────────
-  console.log("\n══ STEP 7: /offers/search?q=Bier&zipCode=4910&allowedRetailers=maximarkt ══");
-  const searchMaxi = await apiGet(headers, "/offers/search?as=web&q=Bier&zipCode=4910&limit=10&allowedRetailers=maximarkt");
-  if (searchMaxi) {
-    const arr = Array.isArray(searchMaxi?.results) ? searchMaxi.results : [];
-    console.log(`   Treffer: ${arr.length}`);
-    if (arr.length) console.log("   First result:", JSON.stringify(arr[0], null, 2).slice(0, 1000));
+  // ── If we have leaflet IDs from HTML: try fetching their offers ──────────
+  if (leafletIdsFromHTML.size > 0) {
+    console.log("\n[14b] Leaflet-Angebote via API für erste 3 gefundene IDs:");
+    const ids = [...leafletIdsFromHTML].slice(0, 3);
+    for (const lid of ids) {
+      const r = await apiGet(h, `${BASE}/leaflets/${lid}/offers?as=mobiledetailed`, `14b-${lid}`);
+      const cnt = countResults(r.data);
+      summary.push({ label:`14b-${lid}`, url:`/leaflets/${lid}/offers`, status: r.status, count: cnt });
+      await sleep(300);
+    }
   }
-  await sleep(500);
 
-  // ── 9. Alternate retailer IDs (chainId=88 per user hint) ────────────────
-  console.log("\n══ STEP 8: /retailers?chainId=88 (Maximarkt chain?) ══");
-  const chain88 = await apiGet(headers, "/retailers?as=web&chainId=88&limit=10");
-  if (chain88) console.log("   Result:", JSON.stringify(chain88, null, 2).slice(0, 2000));
+  // ── Summary ───────────────────────────────────────────────────────────────
+  console.log("\n\n═══════════════════════════════════════════════════════════════");
+  console.log("📊 ZUSAMMENFASSUNG");
+  console.log("═══════════════════════════════════════════════════════════════");
+  const hits = summary.filter(s => s.status === 200 && s.count !== 0 && s.count !== "?");
+  const multiHits = hits.filter(s => typeof s.count === "number" && s.count > 1);
 
-  console.log("\n\n═══════════════════════════════════════════════════════");
-  console.log("✅ Diagnostic abgeschlossen");
-  console.log("═══════════════════════════════════════════════════════");
+  console.log("\n✅ Endpoints mit 200 OK + nicht-leerer Response:");
+  hits.length > 0
+    ? hits.forEach(s => console.log(`   [${s.label}] count=${s.count}  ${s.url}`))
+    : console.log("   (keine)");
+
+  console.log("\n🎯 Endpoints mit ARRAY > 1 Leaflet:");
+  multiHits.length > 0
+    ? multiHits.forEach(s => console.log(`   [${s.label}] count=${s.count}  ${s.url}`))
+    : console.log("   (keine)");
+
+  console.log("\n📋 Alle Ergebnisse:");
+  summary.forEach(s => console.log(`   [${s.label}] ${s.status}  count=${s.count}  ${s.url.slice(0,80)}`));
+
+  if (leafletIdsFromHTML.size > 0) {
+    console.log(`\n🗂️  HTML-Scraping Leaflet-IDs: ${[...leafletIdsFromHTML].join(", ")}`);
+  }
+
+  console.log("\n═══════════════════════════════════════════════════════════════");
 }
 
 main()
   .then(() => process.exit(0))
-  .catch(e => { console.error("❌ Fatal:", e.message); process.exit(0); }); // exit 0 even on error
+  .catch(e => { console.error("❌ Fatal:", e.message, e.stack); process.exit(0); });
