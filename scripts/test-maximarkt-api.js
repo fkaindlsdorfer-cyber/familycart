@@ -317,13 +317,90 @@ async function partC() {
   console.log(`\n── LEAFLET-IDs aus Regex (${idSet.size}): ${[...idSet].join(", ")}`);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PART D — advertisementcollections endpoint candidates
+// ─────────────────────────────────────────────────────────────────────────────
+async function partD(h) {
+  console.log("\n═══════════════════════════════════════════════════════");
+  console.log("TEIL D — advertisementcollections Endpoint-Kandidaten");
+  console.log("═══════════════════════════════════════════════════════\n");
+
+  const LAT = "48.2094", LON = "13.4889"; // Ried im Innkreis
+  const candidates = [
+    `${BASE}/advertisementcollections?as=mobiledetailed&retailerId=12776&latitude=${LAT}&longitude=${LON}`,
+    `${BASE}/advertisementcollections?as=mobiledetailed&advertiserId=12776&latitude=${LAT}&longitude=${LON}`,
+    `${BASE}/advertisementcollections/retailer/12776?as=mobiledetailed&latitude=${LAT}&longitude=${LON}`,
+    `${BASE}/retailers/12776/advertisementcollections?as=mobiledetailed&latitude=${LAT}&longitude=${LON}`,
+    `${BASE}/offers/12776/advertisementcollections?as=mobiledetailed&zipCode=4910&latitude=${LAT}&longitude=${LON}`,
+  ];
+
+  let allFailed = true;
+  for (const url of candidates) {
+    console.log(`GET ${url}`);
+    try {
+      const res  = await fetch(url, { headers: h });
+      const text = await res.text();
+      console.log(`   Status: ${res.status}`);
+      console.log(`   Body (erste 1000):\n${text.slice(0, 1000)}\n`);
+      if (res.ok) allFailed = false;
+    } catch (e) {
+      console.log(`   ❌ ${e.message}\n`);
+    }
+    await sleep(400);
+  }
+
+  // ── Falls alle 404: Bundle nach echtem Endpoint durchsuchen ───────────────
+  if (allFailed) {
+    console.log("── Alle 404 – Bundle-Suche nach echtem Endpoint ─────────");
+    const pageRes = await fetch("https://www.marktguru.at/rp/maximarkt-prospekte", {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
+    });
+    const html = await pageRes.text();
+
+    // Find JS bundle URLs
+    const bundles = [...html.matchAll(/src="(\/[^"]+\.js)"/g)].map(m => m[1]);
+    console.log(`\nGefundene JS-Bundles (${bundles.length}):`);
+    bundles.forEach(b => console.log("  " + b));
+
+    const needles = ["advertisementcollections", "leaflets?", "retailerLocation", "74260"];
+    for (const bundlePath of bundles.slice(0, 6)) {
+      const bundleUrl = `https://www.marktguru.at${bundlePath}`;
+      try {
+        const bRes  = await fetch(bundleUrl, {
+          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
+        });
+        const bText = await bRes.text();
+        let found = false;
+        for (const needle of needles) {
+          const pos = bText.indexOf(needle);
+          if (pos !== -1) {
+            if (!found) { console.log(`\n📦 ${bundlePath} (${bText.length} Zeichen):`); found = true; }
+            console.log(`  "${needle}" bei Pos ${pos}:`);
+            console.log("  " + bText.slice(Math.max(0, pos - 150), pos + 150));
+          }
+        }
+      } catch (e) {
+        console.log(`  ❌ ${bundlePath}: ${e.message}`);
+      }
+      await sleep(300);
+    }
+  }
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
   console.log("═══════════════════════════════════════════════════════");
-  console.log("🔬 Maximarkt API Diagnostic — Phase 4");
+  console.log("🔬 Maximarkt API Diagnostic — Phase 5");
   console.log("═══════════════════════════════════════════════════════\n");
 
-  await partC();
+  const { apiKey, clientKey } = await getApiKeys();
+  const h = {
+    "x-apikey":    apiKey,
+    "x-clientkey": clientKey,
+    "User-Agent":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+  };
+
+  await partD(h);
 
   console.log("\n═══════════════════════════════════════════════════════");
 }
