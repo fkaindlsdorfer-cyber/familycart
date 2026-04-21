@@ -74,11 +74,9 @@ async function fetchMaximarktLeaflets() {
   const html = await htmlRes.text();
 
   const idSet = new Set();
-  const idRe  = /\/leaflets\/(\d{5,8})\//g;
+  const idRe  = /mgat\.b-cdn\.net\/api\/v1\/leaflets\/(\d+)\/images/g;
   let idm;
-  while ((idm = idRe.exec(html)) !== null) {
-    if (idm[1] !== "12776") idSet.add(idm[1]); // exclude retailer ID
-  }
+  while ((idm = idRe.exec(html)) !== null) idSet.add(idm[1]);
   console.log(`   🔍 ${idSet.size} Kandidaten-IDs: ${[...idSet].join(", ")}`);
 
   if (idSet.size === 0) {
