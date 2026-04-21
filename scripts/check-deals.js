@@ -60,97 +60,42 @@ async function getMarktguruKeys() {
   return { apiKey, clientKey };
 }
 
-// ── Maximarkt: fetch active leaflets ─────────────────────────────────────────
+// ── Maximarkt: fetch active leaflets via publishers API ───────────────────────
 async function fetchMaximarktLeaflets() {
   console.log("\n📰 Lade Maximarkt Leaflets...");
 
-  // Step 1 – scrape leaflet IDs from HTML
-  const htmlRes = await fetch("https://www.marktguru.at/rp/maximarkt-prospekte", {
+  const { apiKey, clientKey } = await getMarktguruKeys();
+  const url = "https://api.marktguru.at/api/v1/publishers/retailer/maximarkt/leaflets?as=mobile&limit=20&offset=0&zipCode=4910";
+  const res = await fetch(url, {
     headers: {
-      "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      "Accept-Language": "de-AT,de;q=0.9",
+      "X-ApiKey":    apiKey,
+      "X-ClientKey": clientKey,
+      "User-Agent":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     }
   });
-  const html = await htmlRes.text();
 
-  const idSet = new Set();
-  const idRe  = /mgat\.b-cdn\.net\/api\/v1\/leaflets\/(\d+)\/images/g;
-  let idm;
-  while ((idm = idRe.exec(html)) !== null) idSet.add(idm[1]);
-  console.log(`   🔍 ${idSet.size} Kandidaten-IDs: ${[...idSet].join(", ")}`);
-
-  if (idSet.size === 0) {
-    console.log("   ⚠️  Keine Leaflet-IDs im HTML gefunden.");
+  if (!res.ok) {
+    console.log(`   ❌ Maximarkt leaflets API: ${res.status}`);
     return [];
   }
 
-  // Step 2 – fetch metadata per ID
-  const { apiKey, clientKey } = await getMarktguruKeys();
-  const headers = {
-    "x-apikey":    apiKey,
-    "x-clientkey": clientKey,
-    "User-Agent":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-  };
+  const data = await res.json();
+  const now  = Date.now();
 
-  const now    = new Date();
-  const active = [];
+  const active = (data.results || [])
+    .map(r => ({
+      id:        r.mainLeafletId || r.id,
+      name:      r.name ?? "",
+      validFrom: r.validFrom?.slice(0, 10) ?? null,
+      validTo:   r.validTo?.slice(0, 10)   ?? null,
+      pageCount: r.pageImages?.count ?? r.pageCount ?? 1,
+    }))
+    .filter(l => new Date(l.validTo).getTime() >= now)
+    .filter(l => !(SKIP_OUTDOOR_LEAFLETS && /outdoor/i.test(l.name)));
 
-  for (const id of idSet) {
-    try {
-      const res = await fetch(
-        `https://api.marktguru.at/api/v1/leaflets/${id}?as=mobiledetailed`,
-        { headers }
-      );
-      if (!res.ok) { await sleep(300); continue; }
-      const data = await res.json();
-
-      // Verify it's a Maximarkt leaflet
-      const advertiserId   = data.advertiser?.id ?? "";
-      const advertiserName = data.advertiser?.name ?? "";
-      if (!advertiserId.includes("12776") && !/maximarkt/i.test(advertiserName)) {
-        console.log(`   ⏭️  ID ${id}: kein Maximarkt (${advertiserId || advertiserName})`);
-        await sleep(200); continue;
-      }
-
-      // Check validity window
-      const validFrom = data.validFrom ? new Date(data.validFrom) : null;
-      const validTo   = data.validTo   ? new Date(data.validTo)   : null;
-      if (validTo && validTo < now) {
-        console.log(`   ⏭️  ID ${id}: abgelaufen (${data.validTo?.slice(0,10)})`);
-        await sleep(200); continue;
-      }
-      if (validFrom && validFrom > now) {
-        console.log(`   ⏭️  ID ${id}: noch nicht aktiv (${data.validFrom?.slice(0,10)})`);
-        await sleep(200); continue;
-      }
-
-      const name      = data.name ?? data.title ?? "";
-      const pageCount = data.pageImages?.count ?? data.pageCount ?? 0;
-
-      if (SKIP_OUTDOOR_LEAFLETS && /outdoor/i.test(name)) {
-        console.log(`   ⏭️  ID ${id}: Outdoor-Prospekt übersprungen ("${name}")`);
-        await sleep(200); continue;
-      }
-
-      if (pageCount === 0) {
-        console.log(`   ⚠️  ID ${id}: pageCount=0, übersprungen`);
-        await sleep(200); continue;
-      }
-
-      console.log(`   ✅ ID ${id}: "${name}" | ${pageCount} Seiten | ${data.validFrom?.slice(0,10)} → ${data.validTo?.slice(0,10)}`);
-      active.push({
-        id,
-        name,
-        validFrom:  data.validFrom?.slice(0, 10) ?? null,
-        validTo:    data.validTo?.slice(0, 10)   ?? null,
-        pageCount,
-      });
-    } catch (e) {
-      console.error(`   ⚠️  Leaflet ${id}: ${e.message}`);
-    }
-    await sleep(300);
-  }
-
+  active.forEach(l =>
+    console.log(`   ✅ ID ${l.id}: "${l.name}" | ${l.pageCount} Seiten | ${l.validFrom} → ${l.validTo}`)
+  );
   console.log(`   📰 ${active.length} aktive Maximarkt-Leaflets\n`);
   return active;
 }
