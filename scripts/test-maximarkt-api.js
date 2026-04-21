@@ -1,10 +1,9 @@
 /**
- * Maximarkt API Diagnostic — Phase 3
+ * Maximarkt API Diagnostic — Phase 4
  *
  * PART A: Test /api/v1/leaflets/{id} metadata endpoint with all `as=` variants.
  * PART B: Structured HTML scraping of /rp/maximarkt-prospekte with per-leaflet metadata.
- *
- * Run via GitHub Actions "Test Maximarkt API" workflow. No Firebase access.
+ * PART C: HTML content analysis — are active leaflets server-rendered or JS-loaded?
  */
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -247,41 +246,84 @@ async function partB() {
   return clean;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PART C — HTML content analysis: are active leaflets server-rendered?
+// ─────────────────────────────────────────────────────────────────────────────
+async function partC() {
+  console.log("\n═══════════════════════════════════════════════════════");
+  console.log("TEIL C — HTML-Inhaltsanalyse /rp/maximarkt-prospekte");
+  console.log("═══════════════════════════════════════════════════════\n");
+
+  const res = await fetch("https://www.marktguru.at/rp/maximarkt-prospekte", {
+    headers: {
+      "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      "Accept-Language": "de-AT,de;q=0.9",
+      "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+  });
+  const html = await res.text();
+  console.log(`HTTP ${res.status}  Länge: ${html.length} Zeichen\n`);
+
+  // ── Erste und letzte 2000 Zeichen ────────────────────────────────────────
+  console.log("── ANFANG (erste 2000 Zeichen) ──────────────────────────");
+  console.log(html.slice(0, 2000));
+  console.log("\n── ENDE (letzte 2000 Zeichen) ───────────────────────────");
+  console.log(html.slice(-2000));
+
+  // ── Datumssuche ──────────────────────────────────────────────────────────
+  const datesToFind = ["23.03", "20.04", "16.04", "29.04", "25.04", "22.04"];
+  console.log("\n── DATUMSSUCHE ──────────────────────────────────────────");
+  for (const date of datesToFind) {
+    const pos = html.indexOf(date);
+    if (pos === -1) {
+      console.log(`\n"${date}" → NICHT GEFUNDEN`);
+    } else {
+      let count = 0;
+      let p = 0;
+      while ((p = html.indexOf(date, p)) !== -1) { count++; p++; }
+      console.log(`\n"${date}" → ${count} Treffer, erster bei Pos ${pos}:`);
+      console.log("  KONTEXT:\n" + html.slice(Math.max(0, pos - 300), pos + 300));
+    }
+  }
+
+  // ── Keyword-Suche ─────────────────────────────────────────────────────────
+  const keywords = ["Outdoor", "maxi.wochenende", "maxi.mal", "Outdoor Träume"];
+  console.log("\n── KEYWORD-SUCHE ────────────────────────────────────────");
+  for (const kw of keywords) {
+    const pos = html.indexOf(kw);
+    if (pos === -1) {
+      console.log(`\n"${kw}" → NICHT GEFUNDEN`);
+    } else {
+      console.log(`\n"${kw}" → gefunden bei Pos ${pos}:`);
+      console.log("  KONTEXT:\n" + html.slice(Math.max(0, pos - 300), pos + 300));
+    }
+  }
+
+  // ── __NEXT_DATA__ vorhanden? ──────────────────────────────────────────────
+  console.log("\n── __NEXT_DATA__ CHECK ──────────────────────────────────");
+  const ndMatch = html.match(/<script\s+id="__NEXT_DATA__"[^>]*>([\s\S]{1,200})/);
+  if (ndMatch) {
+    console.log("__NEXT_DATA__ gefunden. Erste 200 Zeichen des JSON:");
+    console.log(ndMatch[1]);
+  } else {
+    console.log("__NEXT_DATA__ NICHT GEFUNDEN — Seite ist vermutlich clientseitig gerendert.");
+  }
+
+  // ── Leaflet-ID-Regex ─────────────────────────────────────────────────────
+  const idRe  = /\/leaflets\/(\d{5,8})\//g;
+  const idSet = new Set();
+  let m;
+  while ((m = idRe.exec(html)) !== null) idSet.add(m[1]);
+  console.log(`\n── LEAFLET-IDs aus Regex (${idSet.size}): ${[...idSet].join(", ")}`);
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
   console.log("═══════════════════════════════════════════════════════");
-  console.log("🔬 Maximarkt API Diagnostic — Phase 3");
+  console.log("🔬 Maximarkt API Diagnostic — Phase 4");
   console.log("═══════════════════════════════════════════════════════\n");
 
-  const { apiKey, clientKey } = await getApiKeys();
-  const h = {
-    "x-apikey":    apiKey,
-    "x-clientkey": clientKey,
-    "User-Agent":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-  };
-
-  const metaEndpoint = await partA(h);
-  const leaflets     = await partB();
-
-  // ── Final summary ─────────────────────────────────────────────────────────
-  console.log("═══════════════════════════════════════════════════════");
-  console.log("📊 ABSCHLUSSBERICHT");
-  console.log("═══════════════════════════════════════════════════════");
-
-  if (metaEndpoint) {
-    console.log(`\n✅ Metadata-Endpoint nutzbar: ${metaEndpoint.url}`);
-    console.log(`   Felder: ${metaEndpoint.fields.join(", ")}`);
-  } else {
-    console.log("\n⚠️  Kein Metadata-Endpoint — HTML-Scraping für Metadaten verwenden");
-  }
-
-  const nonOutdoor = leaflets.filter(l => !l.isOutdoor);
-  console.log(`\n📰 Gesamt Leaflets: ${leaflets.length}`);
-  console.log(`   Davon Outdoor (skip): ${leaflets.filter(l => l.isOutdoor).length}`);
-  console.log(`   Für Angebots-Extraktion relevant: ${nonOutdoor.length}`);
-  if (nonOutdoor.length > 0) {
-    console.log(`   IDs: ${nonOutdoor.map(l => l.leafletId).join(", ")}`);
-  }
+  await partC();
 
   console.log("\n═══════════════════════════════════════════════════════");
 }
