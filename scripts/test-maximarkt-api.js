@@ -1,21 +1,19 @@
 /**
- * Maximarkt API Diagnostic — Phase 2
- * Tests 14 endpoint candidates to find which one returns ALL active Maximarkt leaflets.
- * Run via GitHub Actions workflow "Test Maximarkt API" (test-maximarkt.yml).
- * Does NOT touch Firebase. Exits 0 regardless of results.
+ * Maximarkt API Diagnostic — Phase 3
+ *
+ * PART A: Test /api/v1/leaflets/{id} metadata endpoint with all `as=` variants.
+ * PART B: Structured HTML scraping of /rp/maximarkt-prospekte with per-leaflet metadata.
+ *
+ * Run via GitHub Actions "Test Maximarkt API" workflow. No Firebase access.
  */
 
-const sleep  = ms => new Promise(r => setTimeout(r, ms));
-const BASE   = "https://api.marktguru.at/api/v1";
-const RID    = 12776;   // Maximarkt retailer ID
-const LAT    = 48.2094;
-const LNG    = 13.4889;
-const ZIP    = 4910;
-const LOC    = `zipCode=${ZIP}&latitude=${LAT}&longitude=${LNG}`;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const BASE  = "https://api.marktguru.at/api/v1";
+
+const PROBE_ID = 73885; // Real ID from Phase 2 scraping — used for Part A
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 async function getApiKeys() {
-  console.log("🔑 Hole API-Keys von marktguru.at...");
   const res = await fetch("https://marktguru.at", {
     headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
   });
@@ -24,200 +22,270 @@ async function getApiKeys() {
   let configStr = "";
   let m;
   while ((m = regex.exec(html)) !== null) configStr = m[1];
-  if (!configStr) throw new Error("Kein <script type=application/json> auf marktguru.at gefunden");
+  if (!configStr) throw new Error("Kein config JSON auf marktguru.at");
   const parsed = JSON.parse(configStr);
   if (!parsed?.config?.apiKey) throw new Error("config.apiKey fehlt");
-  console.log(`   ✅ apiKey=${parsed.config.apiKey.slice(0,8)}… clientKey=${parsed.config.clientKey?.slice(0,8)}…\n`);
+  console.log(`🔑 Keys: apiKey=${parsed.config.apiKey.slice(0,8)}… clientKey=${parsed.config.clientKey?.slice(0,8)}…\n`);
   return { apiKey: parsed.config.apiKey, clientKey: parsed.config.clientKey };
 }
 
-// ── Generic GET helper ────────────────────────────────────────────────────────
-async function apiGet(headers, url, label) {
-  process.stdout.write(`[${label}] GET ${url}\n`);
-  try {
-    const res = await fetch(url, { headers });
-    const text = await res.text();
-    let data = null;
-    try { data = JSON.parse(text); } catch (_) { /* not JSON */ }
-    const preview = text.slice(0, 500).replace(/\n/g, " ");
-    console.log(`   → ${res.status}  preview: ${preview}`);
-    return { status: res.status, data, text };
-  } catch (e) {
-    console.log(`   → ERROR: ${e.message}`);
-    return { status: 0, data: null, text: "" };
+// ── Date helpers ──────────────────────────────────────────────────────────────
+function assignYear(dayMonth) {
+  // dayMonth = "DD.MM." → pick current or next year so the date is not in the past
+  const [d, mo] = dayMonth.replace(/\./g, "").split("").reduce((a, c, i) =>
+    i < 2 ? [a[0] + c, a[1]] : [a[0], a[1] + c], ["", ""]);
+  const day = parseInt(dayMonth.slice(0,2), 10);
+  const mon = parseInt(dayMonth.slice(3,5), 10);
+  const now = new Date();
+  const guess = new Date(now.getFullYear(), mon - 1, day);
+  if (guess < new Date(now.getFullYear(), now.getMonth(), now.getDate() - 3)) {
+    guess.setFullYear(now.getFullYear() + 1);
   }
+  return guess.toISOString().slice(0, 10);
 }
 
-// ── Count array-like results ──────────────────────────────────────────────────
-function countResults(data) {
-  if (!data) return 0;
-  if (Array.isArray(data)) return data.length;
-  if (Array.isArray(data?.results)) return data.results.length;
-  if (Array.isArray(data?.leaflets)) return data.leaflets.length;
-  if (Array.isArray(data?.offers)) return data.offers.length;
-  if (Array.isArray(data?.data)) return data.data.length;
-  if (typeof data === "object") {
-    // single object that IS a leaflet?
-    if (data.id && (data.validFrom || data.pageCount)) return 1;
-  }
-  return "?";
+function parseDateRange(text) {
+  // Matches: "17.04.–22.04." or "17.04. – 22.04." or "17.04.-22.04."
+  const m = text.match(/(\d{2}\.\d{2}\.)\s*[–-]\s*(\d{2}\.\d{2}\.)/);
+  if (!m) return { validFrom: null, validTo: null };
+  return { validFrom: assignYear(m[1]), validTo: assignYear(m[2]) };
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PART A — Leaflet metadata endpoint
+// ─────────────────────────────────────────────────────────────────────────────
+async function partA(h) {
+  console.log("═══════════════════════════════════════════════════════");
+  console.log(`TEIL A — /api/v1/leaflets/${PROBE_ID} Metadata-Endpoints`);
+  console.log("═══════════════════════════════════════════════════════\n");
+
+  const variants = [
+    ["A1", `${BASE}/leaflets/${PROBE_ID}`],
+    ["A2", `${BASE}/leaflets/${PROBE_ID}?as=mobile`],
+    ["A3", `${BASE}/leaflets/${PROBE_ID}?as=mobiledetailed`],
+    ["A4", `${BASE}/leaflets/${PROBE_ID}?as=web`],
+  ];
+
+  const usableFields = ["pageCount", "validFrom", "validTo", "title",
+                        "retailerId", "retailerName", "pages"];
+  let bestVariant = null;
+
+  for (const [label, url] of variants) {
+    console.log(`[${label}] GET ${url}`);
+    try {
+      const res = await fetch(url, { headers: h });
+      const text = await res.text();
+      console.log(`   Status: ${res.status}`);
+      if (res.ok) {
+        const data = JSON.parse(text);
+        console.log(`   FULL RESPONSE:\n${JSON.stringify(data, null, 2)}`);
+        const found = usableFields.filter(f => f in data || f in (data?.leaflet ?? {}));
+        if (found.length > 0) {
+          console.log(`   ✅ Nützliche Felder: ${found.join(", ")}`);
+          if (!bestVariant) bestVariant = { label, url, fields: found, data };
+        }
+      } else {
+        console.log(`   Body: ${text.slice(0, 300)}`);
+      }
+    } catch (e) {
+      console.log(`   ❌ ${e.message}`);
+    }
+    console.log("");
+    await sleep(400);
+  }
+
+  if (bestVariant) {
+    console.log(`✅ Bester Metadata-Endpoint: [${bestVariant.label}]`);
+    console.log(`   Nutzbare Felder: ${bestVariant.fields.join(", ")}`);
+  } else {
+    console.log("⚠️  Kein Metadata-Endpoint lieferte nützliche Felder.");
+  }
+  return bestVariant;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PART B — Structured HTML scraping
+// ─────────────────────────────────────────────────────────────────────────────
+async function partB() {
+  console.log("\n═══════════════════════════════════════════════════════");
+  console.log("TEIL B — Structured HTML scraping /rp/maximarkt-prospekte");
+  console.log("═══════════════════════════════════════════════════════\n");
+
+  const res = await fetch("https://www.marktguru.at/rp/maximarkt-prospekte", {
+    headers: {
+      "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      "Accept-Language": "de-AT,de;q=0.9",
+      "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+  });
+  const html = await res.text();
+  console.log(`HTTP ${res.status}  HTML-Länge: ${html.length} Zeichen\n`);
+
+  // ── Strategy 1: __NEXT_DATA__ structured JSON ────────────────────────────
+  const leaflets = [];
+  const nextDataMatch = html.match(
+    /<script\s+id="__NEXT_DATA__"\s+type="application\/json">([\s\S]*?)<\/script>/
+  );
+
+  if (nextDataMatch) {
+    console.log("📦 __NEXT_DATA__ gefunden – versuche strukturierte Extraktion...");
+    const nd = JSON.parse(nextDataMatch[1]);
+    // Dump top-level keys to understand structure
+    const topKeys = Object.keys(nd?.props?.pageProps ?? {});
+    console.log(`   pageProps keys: ${topKeys.join(", ")}`);
+
+    // Walk the tree looking for arrays that look like leaflets
+    const findLeaflets = (obj, depth = 0) => {
+      if (depth > 6 || !obj || typeof obj !== "object") return;
+      if (Array.isArray(obj)) {
+        if (obj.length > 0 && obj[0]?.id && (obj[0]?.pageCount !== undefined || obj[0]?.validFrom)) {
+          obj.forEach(l => {
+            if (l.id && String(l.id).length >= 5) {
+              leaflets.push({
+                leafletId:  String(l.id),
+                title:      l.title ?? l.name ?? l.description ?? null,
+                pageCount:  l.pageCount ?? l.pages ?? null,
+                validFrom:  l.validFrom?.slice(0,10) ?? null,
+                validTo:    l.validTo?.slice(0,10) ?? null,
+                retailerId: l.retailer?.id ?? l.retailerId ?? null,
+                retailerName: l.retailer?.name ?? l.retailerName ?? null,
+              });
+            }
+          });
+          return;
+        }
+        obj.forEach(item => findLeaflets(item, depth + 1));
+      } else {
+        Object.values(obj).forEach(v => findLeaflets(v, depth + 1));
+      }
+    };
+    findLeaflets(nd?.props?.pageProps);
+
+    if (leaflets.length > 0) {
+      console.log(`   ✅ ${leaflets.length} Leaflets aus __NEXT_DATA__ extrahiert`);
+    } else {
+      // Dump full pageProps (truncated) to understand structure
+      console.log("   ℹ️  Keine Leaflets auto-erkannt. pageProps (first 3000):");
+      console.log(JSON.stringify(nd?.props?.pageProps, null, 2).slice(0, 3000));
+    }
+  } else {
+    console.log("⚠️  Kein __NEXT_DATA__ gefunden – falle auf HTML-Regex zurück\n");
+  }
+
+  // ── Strategy 2: HTML regex fallback ─────────────────────────────────────
+  if (leaflets.length === 0) {
+    console.log("🔍 HTML-Regex-Fallback...");
+
+    // Find all leaflet IDs from links like /leaflets/{id}/page/ or /leaflets/{id}/index or /leaflets/{id}"
+    const idRe = /\/leaflets\/(\d{5,8})(?:\/|")/g;
+    const idSet = new Set();
+    let idm;
+    while ((idm = idRe.exec(html)) !== null) {
+      const id = idm[1];
+      if (id !== "12776") idSet.add(id); // exclude retailer ID
+    }
+    console.log(`   Gefundene Leaflet-IDs (${idSet.size}): ${[...idSet].join(", ")}`);
+
+    // For each ID, try to find its surrounding card in the HTML
+    for (const lid of idSet) {
+      // Find position of this ID in HTML, look ±1500 chars around it for metadata
+      const pos = html.indexOf(`/leaflets/${lid}/`);
+      if (pos === -1) continue;
+      const chunk = html.slice(Math.max(0, pos - 800), pos + 800);
+
+      // Title: look for common heading/alt patterns nearby
+      const titleM = chunk.match(/alt="([^"]{3,80})"|title="([^"]{3,80})"/) ??
+                     chunk.match(/<h[23][^>]*>([^<]{3,60})<\/h[23]>/i);
+      const title = titleM ? (titleM[1] ?? titleM[2] ?? titleM[3] ?? null)?.trim() : null;
+
+      // Page count
+      const pageM = chunk.match(/(\d+)\s+Seite(?:n)?/i);
+      const pageCount = pageM ? parseInt(pageM[1], 10) : null;
+
+      // Validity dates
+      const { validFrom, validTo } = parseDateRange(chunk);
+
+      // Retailer context
+      const isMaximarkt = /maximarkt/i.test(chunk);
+
+      if (isMaximarkt) {
+        leaflets.push({
+          leafletId:   lid,
+          title:       title ?? null,
+          pageCount:   pageCount ?? null,
+          validFrom:   validFrom ?? null,
+          validTo:     validTo ?? null,
+          retailerId:  12776,
+          retailerName:"Maximarkt",
+          isOutdoor:   /outdoor/i.test(title ?? chunk),
+        });
+      }
+    }
+  }
+
+  // ── Add isOutdoor / isMaximarkt flags and filter ─────────────────────────
+  const clean = leaflets
+    .filter(l => l.retailerName == null || /maximarkt/i.test(String(l.retailerName)))
+    .map(l => ({
+      ...l,
+      isOutdoor:   l.isOutdoor ?? /outdoor/i.test(String(l.title ?? "")),
+      isMaximarkt: true,
+    }));
+
+  // ── Output ────────────────────────────────────────────────────────────────
+  console.log(`\n📋 ${clean.length} aktive Maximarkt-Leaflets:\n`);
+  clean.forEach((l, i) => {
+    console.log(`  [${i+1}] ID=${l.leafletId}`);
+    console.log(`       Titel:     ${l.title ?? "(unbekannt)"}`);
+    console.log(`       Seiten:    ${l.pageCount ?? "?"}`);
+    console.log(`       Gültig:    ${l.validFrom ?? "?"} → ${l.validTo ?? "?"}`);
+    console.log(`       Outdoor:   ${l.isOutdoor ? "JA (skip)" : "nein"}`);
+    console.log(`       RetailerId:${l.retailerId ?? "?"}`);
+    console.log("");
+  });
+
+  return clean;
+}
+
+// ── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
-  console.log("═══════════════════════════════════════════════════════════════");
-  console.log("🔬 Maximarkt API Diagnostic — Phase 2 (14 Kandidaten + HTML)");
-  console.log("═══════════════════════════════════════════════════════════════\n");
+  console.log("═══════════════════════════════════════════════════════");
+  console.log("🔬 Maximarkt API Diagnostic — Phase 3");
+  console.log("═══════════════════════════════════════════════════════\n");
 
   const { apiKey, clientKey } = await getApiKeys();
-  const h = { "x-apikey": apiKey, "x-clientkey": clientKey,
-               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" };
-
-  const summary = []; // { label, url, status, count }
-
-  const test = async (label, url) => {
-    const r = await apiGet(h, url, label);
-    const count = countResults(r.data);
-    summary.push({ label, url, status: r.status, count });
-    await sleep(400);
-    return r;
+  const h = {
+    "x-apikey":    apiKey,
+    "x-clientkey": clientKey,
+    "User-Agent":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
   };
 
-  // ── Candidates 1–3: /offers/{retailerId}/... ─────────────────────────────
-  await test("01", `${BASE}/offers/${RID}/leaflets?${LOC}&as=mobiledetailed`);
-  await test("02", `${BASE}/offers/${RID}/bestleaflets?${LOC}&as=mobiledetailed`);
-  await test("03", `${BASE}/offers/${RID}/allleaflets?${LOC}&as=mobiledetailed`);
+  const metaEndpoint = await partA(h);
+  const leaflets     = await partB();
 
-  // ── Candidates 4–5: /retailers/{id}/leaflets ─────────────────────────────
-  await test("04", `${BASE}/retailers/${RID}/leaflets?${LOC}&as=mobiledetailed`);
-  await test("05", `${BASE}/retailers/${RID}/leaflets/current?${LOC}&as=mobiledetailed`);
+  // ── Final summary ─────────────────────────────────────────────────────────
+  console.log("═══════════════════════════════════════════════════════");
+  console.log("📊 ABSCHLUSSBERICHT");
+  console.log("═══════════════════════════════════════════════════════");
 
-  // ── Candidate 6: /retailers/{id}/locations → extract locationId ──────────
-  const r6 = await test("06", `${BASE}/retailers/${RID}/locations?latitude=${LAT}&longitude=${LNG}&as=mobiledetailed`);
-  let locationId = null;
-  if (r6.data) {
-    const arr = Array.isArray(r6.data) ? r6.data
-              : Array.isArray(r6.data?.results) ? r6.data.results
-              : Array.isArray(r6.data?.locations) ? r6.data.locations
-              : r6.data?.id ? [r6.data] : [];
-    if (arr.length > 0) {
-      locationId = arr[0]?.id ?? arr[0]?.retailerLocationId ?? null;
-      console.log(`   📍 Erste Location: id=${locationId}  raw=${JSON.stringify(arr[0]).slice(0,200)}`);
-    } else {
-      console.log("   ⚠️  Keine Location-Einträge in Response");
-    }
-  }
-
-  // ── Candidates 7–9: /retailerLocations/{id}/... (only if id found) ───────
-  if (locationId) {
-    await test("07", `${BASE}/retailerLocations/${locationId}/leaflets?as=mobiledetailed`);
-    await test("08", `${BASE}/retailerLocations/${locationId}/offers?as=mobiledetailed`);
-    await test("09", `${BASE}/retailerLocationOffers?retailerLocationId=${locationId}&as=mobiledetailed`);
+  if (metaEndpoint) {
+    console.log(`\n✅ Metadata-Endpoint nutzbar: ${metaEndpoint.url}`);
+    console.log(`   Felder: ${metaEndpoint.fields.join(", ")}`);
   } else {
-    console.log("[07–09] Übersprungen – keine locationId aus Kandidat 6\n");
-    summary.push({ label:"07", url:"(skipped – no locationId)", status:"-", count:"-" });
-    summary.push({ label:"08", url:"(skipped – no locationId)", status:"-", count:"-" });
-    summary.push({ label:"09", url:"(skipped – no locationId)", status:"-", count:"-" });
+    console.log("\n⚠️  Kein Metadata-Endpoint — HTML-Scraping für Metadaten verwenden");
   }
 
-  // ── Candidates 10–11: /leaflets?retailerId=... ───────────────────────────
-  await test("10", `${BASE}/leaflets?retailerId=${RID}&${LOC}&as=mobiledetailed`);
-  await test("11", `${BASE}/leaflets/current?retailerId=${RID}&${LOC}`);
-
-  // ── Candidates 12–13: /publishers/retailer/... ───────────────────────────
-  await test("12", `${BASE}/publishers/retailer/maximarkt/city/ried-im-innkreis/leaflets?as=mobile`);
-  await test("13", `${BASE}/publishers/retailer/maximarkt/city/ried-im-innkreis/prospekte?as=mobile`);
-
-  // ── Candidate 14: HTML scraping of /rp/maximarkt-prospekte ───────────────
-  console.log("\n[14] HTML-Scraping https://www.marktguru.at/rp/maximarkt-prospekte");
-  const leafletIdsFromHTML = new Set();
-  try {
-    const res = await fetch("https://www.marktguru.at/rp/maximarkt-prospekte", {
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                 "Accept-Language": "de-AT,de;q=0.9" }
-    });
-    const html = await res.text();
-    console.log(`   → HTTP ${res.status}, HTML length: ${html.length}`);
-
-    // Pattern: /leaflets/123456 or leaflet-id="123456" or data-id="123456" or "leafletId":123456
-    const patterns = [
-      /\/leaflets\/(\d+)/g,
-      /leaflet[-_]?id[=":]+\s*"?(\d+)/gi,
-      /"leafletId"\s*:\s*(\d+)/g,
-      /data-leaflet[=-]id="(\d+)"/gi,
-      /"id"\s*:\s*(\d+).*?maximarkt/gi,
-    ];
-    for (const pat of patterns) {
-      let m2;
-      const re = new RegExp(pat.source, pat.flags);
-      while ((m2 = re.exec(html)) !== null) leafletIdsFromHTML.add(m2[1]);
-    }
-
-    // Also look for Next.js __NEXT_DATA__
-    const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
-    if (nextDataMatch) {
-      console.log("   📦 __NEXT_DATA__ gefunden – suche nach leaflet IDs...");
-      const nd = nextDataMatch[1];
-      const idRe = /"id"\s*:\s*(\d{5,8})/g;
-      let nm;
-      while ((nm = idRe.exec(nd)) !== null) leafletIdsFromHTML.add(nm[1]);
-      // Show first 1000 chars of Next data for context
-      console.log(`   __NEXT_DATA__ (first 1000): ${nd.slice(0, 1000)}`);
-    }
-
-    if (leafletIdsFromHTML.size > 0) {
-      console.log(`   ✅ Gefundene Leaflet-IDs: ${[...leafletIdsFromHTML].join(", ")}`);
-    } else {
-      console.log("   ⚠️  Keine Leaflet-IDs im HTML gefunden");
-      // Dump first 2000 chars to help debug
-      console.log(`   HTML preview (first 2000): ${html.slice(0, 2000)}`);
-    }
-    summary.push({ label:"14", url:"HTML /rp/maximarkt-prospekte", status: res.status,
-                   count: leafletIdsFromHTML.size > 0 ? `${leafletIdsFromHTML.size} IDs` : 0 });
-  } catch (e) {
-    console.log(`   ❌ Fehler: ${e.message}`);
-    summary.push({ label:"14", url:"HTML /rp/maximarkt-prospekte", status:"ERR", count:0 });
+  const nonOutdoor = leaflets.filter(l => !l.isOutdoor);
+  console.log(`\n📰 Gesamt Leaflets: ${leaflets.length}`);
+  console.log(`   Davon Outdoor (skip): ${leaflets.filter(l => l.isOutdoor).length}`);
+  console.log(`   Für Angebots-Extraktion relevant: ${nonOutdoor.length}`);
+  if (nonOutdoor.length > 0) {
+    console.log(`   IDs: ${nonOutdoor.map(l => l.leafletId).join(", ")}`);
   }
 
-  // ── If we have leaflet IDs from HTML: try fetching their offers ──────────
-  if (leafletIdsFromHTML.size > 0) {
-    console.log("\n[14b] Leaflet-Angebote via API für erste 3 gefundene IDs:");
-    const ids = [...leafletIdsFromHTML].slice(0, 3);
-    for (const lid of ids) {
-      const r = await apiGet(h, `${BASE}/leaflets/${lid}/offers?as=mobiledetailed`, `14b-${lid}`);
-      const cnt = countResults(r.data);
-      summary.push({ label:`14b-${lid}`, url:`/leaflets/${lid}/offers`, status: r.status, count: cnt });
-      await sleep(300);
-    }
-  }
-
-  // ── Summary ───────────────────────────────────────────────────────────────
-  console.log("\n\n═══════════════════════════════════════════════════════════════");
-  console.log("📊 ZUSAMMENFASSUNG");
-  console.log("═══════════════════════════════════════════════════════════════");
-  const hits = summary.filter(s => s.status === 200 && s.count !== 0 && s.count !== "?");
-  const multiHits = hits.filter(s => typeof s.count === "number" && s.count > 1);
-
-  console.log("\n✅ Endpoints mit 200 OK + nicht-leerer Response:");
-  hits.length > 0
-    ? hits.forEach(s => console.log(`   [${s.label}] count=${s.count}  ${s.url}`))
-    : console.log("   (keine)");
-
-  console.log("\n🎯 Endpoints mit ARRAY > 1 Leaflet:");
-  multiHits.length > 0
-    ? multiHits.forEach(s => console.log(`   [${s.label}] count=${s.count}  ${s.url}`))
-    : console.log("   (keine)");
-
-  console.log("\n📋 Alle Ergebnisse:");
-  summary.forEach(s => console.log(`   [${s.label}] ${s.status}  count=${s.count}  ${s.url.slice(0,80)}`));
-
-  if (leafletIdsFromHTML.size > 0) {
-    console.log(`\n🗂️  HTML-Scraping Leaflet-IDs: ${[...leafletIdsFromHTML].join(", ")}`);
-  }
-
-  console.log("\n═══════════════════════════════════════════════════════════════");
+  console.log("\n═══════════════════════════════════════════════════════");
 }
 
 main()
   .then(() => process.exit(0))
-  .catch(e => { console.error("❌ Fatal:", e.message, e.stack); process.exit(0); });
+  .catch(e => { console.error("❌ Fatal:", e.message, "\n", e.stack); process.exit(0); });
