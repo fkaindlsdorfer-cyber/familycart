@@ -146,7 +146,7 @@ Keine Treffer: {"deals":[]}`;
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             contents: [{ parts: [
-              { inlineData: { mimeType: "image/webp", data: base64 } },
+              { inlineData: { mimeType: "image/jpeg", data: base64 } },
               { text: prompt },
             ]}],
             generationConfig: { temperature: 0, maxOutputTokens: 500 },
@@ -166,6 +166,10 @@ Keine Treffer: {"deals":[]}`;
       }
 
       const data    = await res.json();
+      if (page === 0) {
+        console.log(`[RAW-API] leaflet=${leaflet.id} page=${page}`);
+        console.log(JSON.stringify(data, null, 2).slice(0, 2000));
+      }
       const rawText = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
       console.log(`[DBG] leaflet=${leaflet.id} page=${page} responseText=|${rawText.slice(0, 500)}| length=${rawText.length}`);
       const jsonM   = rawText.match(/\{[\s\S]*\}/);
