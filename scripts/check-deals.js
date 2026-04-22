@@ -110,8 +110,9 @@ async function scanMaximarktLeaflet(leaflet, articles) {
     return [];
   }
 
-  console.log(`\n🤖 Scanne "${leaflet.name}" (${leaflet.pageCount} Seiten)...`);
-  console.log(`[DBG] GEMINI_MODEL=${process.env.GEMINI_MODEL || '(default)'} KEY_LEN=${GEMINI_API_KEY?.length || 0}`);
+  const estSecs = leaflet.pageCount * 4;
+  console.log(`\n🤖 Scanne "${leaflet.name}" (${leaflet.pageCount} Seiten, ~${estSecs}s)...`);
+  console.log(`[DBG] KEY_LEN=${GEMINI_API_KEY?.length || 0}`);
   const itemList  = articles.map(a => a.name).slice(0, 60).join(", ");
   const checkedAt = new Date().toISOString();
   const deals     = [];
@@ -125,7 +126,7 @@ async function scanMaximarktLeaflet(leaflet, articles) {
       const imgRes = await fetch(imageUrl);
       if (!imgRes.ok) {
         console.log(`⚠️  Bild nicht erreichbar (${imgRes.status})`);
-        await sleep(3000); continue;
+        await sleep(4000); continue;
       }
       const base64 = Buffer.from(await imgRes.arrayBuffer()).toString("base64");
 
@@ -154,25 +155,35 @@ Keine Treffer: {"deals":[]}`;
         }
       );
 
+      // Exponential backoff: 10s → 30s → 60s
       let res = await callGemini();
-      if (res.status === 429) {
-        process.stdout.write("⏳ rate limit, 5s retry... ");
-        await sleep(5000);
+      const backoffs = [10000, 30000, 60000];
+      for (const delay of backoffs) {
+        if (res.status !== 429) break;
+        process.stdout.write(`⏳ 429, ${delay / 1000}s... `);
+        await sleep(delay);
         res = await callGemini();
-        if (res.status === 429) {
-          console.log("⚠️  übersprungen (429 nach Retry)");
-          await sleep(3000); continue;
-        }
+      }
+      if (res.status === 429) {
+        console.log("⚠️  übersprungen (429 nach 3 Retries)");
+        await sleep(4000); continue;
       }
 
-      const data    = await res.json();
+      const data = await res.json();
+
+      // Hard-abort on API error (expired key, quota, etc.)
+      if (data.error) {
+        throw new Error(`Gemini API error ${data.error.code}: ${data.error.message}`);
+      }
+
       if (page === 0) {
-        console.log(`[RAW-API] leaflet=${leaflet.id} page=${page}`);
+        console.log(`[RAW-API] leaflet=${leaflet.id} page=0`);
         console.log(JSON.stringify(data, null, 2).slice(0, 2000));
       }
+
       const rawText = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
       console.log(`[DBG] leaflet=${leaflet.id} page=${page} responseText=|${rawText.slice(0, 500)}| length=${rawText.length}`);
-      const jsonM   = rawText.match(/\{[\s\S]*\}/);
+      const jsonM = rawText.match(/\{[\s\S]*\}/);
 
       if (jsonM) {
         const found = (JSON.parse(jsonM[0]).deals || []).filter(d => d.articleName);
@@ -204,9 +215,10 @@ Keine Treffer: {"deals":[]}`;
       }
     } catch (e) {
       console.log(`[ERR] leaflet=${leaflet.id} page=${page} error=${e.message} stack=${e.stack?.split('\n')[0]}`);
+      if (e.message.startsWith("Gemini API error")) throw e; // propagate fatal errors
     }
 
-    await sleep(3000); // 1 Gemini-Call pro 3 Sekunden
+    await sleep(4000);
   }
 
   console.log(`   → ${deals.length} Deals aus "${leaflet.name}"\n`);
