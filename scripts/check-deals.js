@@ -111,6 +111,7 @@ async function scanMaximarktLeaflet(leaflet, articles) {
   }
 
   console.log(`\n🤖 Scanne "${leaflet.name}" (${leaflet.pageCount} Seiten)...`);
+  console.log(`[DBG] GEMINI_MODEL=${process.env.GEMINI_MODEL || '(default)'} KEY_LEN=${GEMINI_API_KEY?.length || 0}`);
   const itemList  = articles.map(a => a.name).slice(0, 60).join(", ");
   const checkedAt = new Date().toISOString();
   const deals     = [];
@@ -166,7 +167,7 @@ Keine Treffer: {"deals":[]}`;
 
       const data    = await res.json();
       const rawText = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
-      if (page === 0) console.log(`   RAW Gemini response leaflet ${leaflet.id} page 0:`, rawText.slice(0, 500));
+      console.log(`[DBG] leaflet=${leaflet.id} page=${page} responseText=|${rawText.slice(0, 500)}| length=${rawText.length}`);
       const jsonM   = rawText.match(/\{[\s\S]*\}/);
 
       if (jsonM) {
@@ -198,7 +199,7 @@ Keine Treffer: {"deals":[]}`;
         console.log("–");
       }
     } catch (e) {
-      console.log(`⚠️  Seite ${page} Fehler: ${e.message}`);
+      console.log(`[ERR] leaflet=${leaflet.id} page=${page} error=${e.message} stack=${e.stack?.split('\n')[0]}`);
     }
 
     await sleep(3000); // 1 Gemini-Call pro 3 Sekunden
