@@ -117,6 +117,7 @@ async function scanMaximarktLeaflet(leaflet, articles) {
 
   for (let page = 0; page < leaflet.pageCount; page++) {
     const imageUrl = `https://mgat.b-cdn.net/api/v1/leaflets/${leaflet.id}/images/pages/${page}/xlarge.webp`;
+    if (page === 0) console.log(`   Image URL: ${imageUrl}`);
     process.stdout.write(`   📄 Seite ${page + 1}/${leaflet.pageCount}... `);
 
     try {
@@ -165,6 +166,7 @@ Keine Treffer: {"deals":[]}`;
 
       const data    = await res.json();
       const rawText = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
+      if (page === 0) console.log(`   RAW Gemini response leaflet ${leaflet.id} page 0:`, rawText.slice(0, 500));
       const jsonM   = rawText.match(/\{[\s\S]*\}/);
 
       if (jsonM) {
@@ -196,7 +198,7 @@ Keine Treffer: {"deals":[]}`;
         console.log("–");
       }
     } catch (e) {
-      console.log(`⚠️  ${e.message}`);
+      console.log(`⚠️  Seite ${page} Fehler: ${e.message}`);
     }
 
     await sleep(3000); // 1 Gemini-Call pro 3 Sekunden
