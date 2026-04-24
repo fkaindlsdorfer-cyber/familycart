@@ -275,7 +275,7 @@ const FB_CFG={
 };
 
 let db=null, currentUser=null, currentTab="list", addTarget="list", listSort="default";
-let state={items:{},template:{},deals:{},notifications:{}};
+let state={items:{},template:{},deals:{},notifications:{},activeMarkets:null};
 let activeMarkets=null; // null = loading, array = loaded from /settings/activeMarkets
 let storePickerCallback=null;
 let dealRefreshTimer=null;
@@ -294,11 +294,13 @@ function initApp(){
     db.ref("settings/activeMarkets").on("value",snap=>{
       const val=snap.val();
       activeMarkets=Array.isArray(val)?val:["hofer","lidl","eurospar","maximarkt"];
+      state.activeMarkets=activeMarkets;
       render();
       if(document.getElementById("setupScreen").style.display!=="none") renderMarketsSettings();
     },err=>{
       console.warn("settings/activeMarkets read error:",err.message,"– using defaults");
       activeMarkets=["hofer","lidl","eurospar","maximarkt"];
+      state.activeMarkets=activeMarkets;
       if(document.getElementById("setupScreen").style.display!=="none") renderMarketsSettings();
     });
     // Eagerly fetch deals once so badges appear immediately before the real-time listener fires
@@ -692,7 +694,8 @@ function render(){
   const items=Object.entries(state.items||{}).map(([k,v])=>({...v,fbKey:k})).sort((a,b)=>b.id-a.id);
   const tmpl=Object.entries(state.template||{}).map(([k,v])=>({...v,fbKey:k})).sort((a,b)=>b.id-a.id);
   const allDeals=Object.entries(state.deals||{}).map(([k,v])=>({...v,fbKey:k}));
-  const deals=activeMarkets===null?allDeals:allDeals.filter(d=>activeMarkets.includes(d.storeId));
+  const am=state.activeMarkets;
+  const deals=(!am||am.length===0)?allDeals:allDeals.filter(d=>am.map(s=>s.toLowerCase()).includes((d.storeId||"").toLowerCase()));
   // Fix: filter notifications FOR the current user only
   const notifs=Object.entries(state.notifications||{}).map(([k,v])=>({...v,fbKey:k}))
     .filter(n=>n.to===currentUser)
