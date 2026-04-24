@@ -122,7 +122,12 @@ async function callGeminiWithRetry(base64, prompt, maxRetries = 3) {
             { inlineData: { mimeType: "image/jpeg", data: base64 } },
             { text: prompt },
           ]}],
-          generationConfig: { temperature: 0, maxOutputTokens: 500 },
+          generationConfig: {
+              temperature:      0,
+              maxOutputTokens:  8192,
+              responseMimeType: "application/json",
+              thinkingConfig:   { thinkingBudget: 0 },
+            },
         }),
       }
     );
@@ -202,8 +207,15 @@ Keine Treffer: {"deals":[]}`;
         console.log(JSON.stringify(data, null, 2).slice(0, 2000));
       }
 
+      const finishReason = data.candidates?.[0]?.finishReason;
+      if (finishReason === "MAX_TOKENS") {
+        console.log(`⚠️  Antwort abgeschnitten (MAX_TOKENS)`);
+        skippedPages++;
+        await sleep(4000); continue;
+      }
+
       const rawText = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
-      console.log(`[DBG] leaflet=${leaflet.id} page=${page} responseText=|${rawText.slice(0, 500)}| length=${rawText.length}`);
+      console.log(`[DBG] leaflet=${leaflet.id} page=${page} finishReason=${finishReason} responseText=|${rawText.slice(0, 500)}| length=${rawText.length}`);
       const jsonM = rawText.match(/\{[\s\S]*\}/);
 
       if (jsonM) {
