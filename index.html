@@ -687,6 +687,17 @@ function renderShopMode(){
   document.getElementById("shopList").innerHTML=html;
 }
 
+function parsePrice(p){return parseFloat((p||"").replace(",",".").replace(/[^\d.]/g,""))||Infinity;}
+function findDeals(itemName,allDeals){
+  if(!itemName)return[];
+  const needle=itemName.toLowerCase().trim();
+  if(needle.length<3)return[];
+  return allDeals.filter(d=>{
+    const haystack=(d.articleName||"").toLowerCase();
+    return haystack.includes(needle)||needle.includes(haystack);
+  });
+}
+
 // ── Render ─────────────────────────────────────────────────────────────────
 function render(){
   if(!currentUser)return;
@@ -710,14 +721,6 @@ function render(){
   const db2=document.getElementById("dealBadge");
   db2.style.display=deals.length>0?"block":"none";db2.textContent=deals.length;
 
-  // Build deal map for badge lookup: name.toLowerCase() → deal
-  const dealMap={};
-  deals.forEach(d=>{if(d.articleName)dealMap[d.articleName.toLowerCase()]=d;});
-  console.log("[DBG] active markets:",state.activeMarkets);
-  console.log("[DBG] dealMap size:",Object.keys(dealMap).length);
-  console.log("[DBG] dealMap keys (first 30):",Object.keys(dealMap).slice(0,30));
-  console.log("[DBG] sample deal:",deals[0]);
-
   // ── LIST ──
   // Sort
   let sortedItems=[...items];
@@ -730,9 +733,10 @@ function render(){
   const renderListItem=(item,i)=>{
     const store=storeById(item.storeId);
     const inTmpl=tmpl.some(t=>t.name.toLowerCase()===item.name.toLowerCase());
-    const deal=dealMap[item.name.toLowerCase()];
-    console.log("[DBG] looking up:",item.name?.toLowerCase(),"→",deal?"MATCH":"MISS");
-    const dealTag=deal?`<span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;padding:2px 6px;border-radius:5px;background:#FEF3C7;color:#D97706;font-weight:700;margin-left:4px;">🏷️ ${esc(deal.savings||deal.price||"Aktion")}</span>`:"";
+    const matched=findDeals(item.name,deals);
+    const deal=matched.length?matched.slice().sort((a,b)=>parsePrice(a.price)-parsePrice(b.price))[0]:null;
+    const extra=matched.length>1?matched.length-1:0;
+    const dealTag=deal?`<span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;padding:2px 6px;border-radius:5px;background:#FEF3C7;color:#D97706;font-weight:700;margin-left:4px;">🏷️ ${esc(deal.savings||deal.price||"Aktion")}${extra?` (+${extra})`:""}</span>`:"";
     return `<div style="background:${item.done?"#F5F5F0":"white"};border-radius:16px;overflow:hidden;box-shadow:${item.done?"none":"0 2px 10px rgba(0,0,0,0.07)"};border:${item.done?"1px solid #EAEAE4":"1px solid transparent"};opacity:${item.done?.65:1};margin-bottom:8px;animation:slideUp .22s ease ${Math.min(i,6)*.04}s both;">
       <div style="padding:12px 13px;display:flex;gap:10px;align-items:center;">
         <div onclick="openEditModal('${item.fbKey}','list')" style="width:46px;height:46px;border-radius:12px;overflow:hidden;flex-shrink:0;background:${item.image?"transparent":"#F3F4F6"};display:flex;align-items:center;justify-content:center;border:${item.image?"none":"1.5px dashed #D1D5DB"};cursor:pointer;">
