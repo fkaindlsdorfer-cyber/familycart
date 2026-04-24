@@ -85,14 +85,17 @@ async function fetchMaximarktLeaflets() {
   const data = await res.json();
   const now  = Date.now();
 
-  console.log('═══ FULL LEAFLET INSPECTION ═══');
-  for (const leaflet of (data.results || [])) {
-    console.log(`──── Leaflet ID ${leaflet.id} / mainLeafletId ${leaflet.mainLeafletId} ────`);
-    console.log(JSON.stringify(leaflet, null, 2));
-  }
-  console.log('═══ END LEAFLET INSPECTION ═══');
-
   const active = (data.results || [])
+    .filter(r => {
+      const pageCount  = r.pageImages?.count ?? r.pageCount ?? 1;
+      const offerCount = r.offerCount ?? r.offers?.count ?? 0;
+      if (offerCount === 0 && pageCount >= 8) {
+        const id = r.mainLeafletId || r.id;
+        console.log(`   ⏭️  ID ${id} übersprungen (Outdoor-Prospekt: ${pageCount} Seiten, 0 offers)`);
+        return false;
+      }
+      return true;
+    })
     .map(r => ({
       id:        r.mainLeafletId || r.id,
       name:      r.name ?? "",
