@@ -12,8 +12,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const FIREBASE_DB_URL  = process.env.FIREBASE_DATABASE_URL;
 const FIREBASE_SERVICE = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-const GEMINI_API_KEY   = process.env.GEMINI_API_KEY;
-const ZIP_CODE         = "5204"; // Strasswalchen
+const GEMINI_API_KEY          = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL_PRIMARY    = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_MODEL_FALLBACK   = 'gemini-2.5-flash-lite';
+let   currentModel            = GEMINI_MODEL_PRIMARY;
+const ZIP_CODE                = "5204"; // Strasswalchen
 
 const SKIP_OUTDOOR_LEAFLETS = true; // "Outdoor"-Prospekte überspringen
 
@@ -103,6 +106,51 @@ async function fetchMaximarktLeaflets() {
   return active;
 }
 
+// ── Gemini API-Call mit Retry + Fehlerklassifizierung ────────────────────────
+async function callGeminiWithRetry(base64, prompt, maxRetries = 3) {
+  const PERMANENT_ERRORS = [400, 401, 403, 404];
+  const TEMPORARY_ERRORS = [429, 500, 502, 503, 504];
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method:  "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [
+            { inlineData: { mimeType: "image/jpeg", data: base64 } },
+            { text: prompt },
+          ]}],
+          generationConfig: { temperature: 0, maxOutputTokens: 500 },
+        }),
+      }
+    );
+    const data = await res.json();
+
+    if (!data.error) return data;
+
+    const code = data.error.code;
+
+    if (PERMANENT_ERRORS.includes(code)) {
+      throw new Error(`Gemini API error ${code}: ${data.error.message}`);
+    }
+
+    if (TEMPORARY_ERRORS.includes(code) && attempt < maxRetries) {
+      const baseDelay = Math.min(60000, Math.pow(2, attempt + 1) * 1000);
+      const jitter    = Math.floor(Math.random() * 1000);
+      const delay     = baseDelay + jitter;
+      process.stdout.write(`⏳ ${code}, retry ${attempt + 1}/${maxRetries} in ${Math.round(delay / 1000)}s... `);
+      await sleep(delay);
+      continue;
+    }
+
+    console.log(`\n   ⚠️  Seite nach ${maxRetries} Retries übersprungen (${code})`);
+    return null;
+  }
+  return null;
+}
+
 // ── Maximarkt: scan one leaflet with Gemini Vision ────────────────────────────
 async function scanMaximarktLeaflet(leaflet, articles) {
   if (!GEMINI_API_KEY) {
@@ -113,14 +161,16 @@ async function scanMaximarktLeaflet(leaflet, articles) {
   const estSecs = leaflet.pageCount * 4;
   console.log(`\n🤖 Scanne "${leaflet.name}" (${leaflet.pageCount} Seiten, ~${estSecs}s)...`);
   console.log(`[DBG] KEY_LEN=${GEMINI_API_KEY?.length || 0}`);
-  const itemList  = articles.map(a => a.name).slice(0, 60).join(", ");
-  const checkedAt = new Date().toISOString();
-  const deals     = [];
+  const itemList    = articles.map(a => a.name).slice(0, 60).join(", ");
+  const checkedAt   = new Date().toISOString();
+  const deals       = [];
+  let   skippedPages = 0;
+  const totalPages  = leaflet.pageCount;
 
-  for (let page = 0; page < leaflet.pageCount; page++) {
+  for (let page = 0; page < totalPages; page++) {
     const imageUrl = `https://mgat.b-cdn.net/api/v1/leaflets/${leaflet.id}/images/pages/${page}/xlarge.webp`;
     if (page === 0) console.log(`   Image URL: ${imageUrl}`);
-    process.stdout.write(`   📄 Seite ${page + 1}/${leaflet.pageCount}... `);
+    process.stdout.write(`   📄 Seite ${page + 1}/${totalPages}... `);
 
     try {
       const imgRes = await fetch(imageUrl);
@@ -140,40 +190,11 @@ Antworte NUR mit JSON – keine weiteren Texte:
 {"deals":[{"articleName":"Name exakt wie in der Suche","price":"1,99 EUR","savings":"-20%","oldPrice":"2,49 EUR"}]}
 Keine Treffer: {"deals":[]}`;
 
-      const callGemini = () => fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method:  "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [
-              { inlineData: { mimeType: "image/jpeg", data: base64 } },
-              { text: prompt },
-            ]}],
-            generationConfig: { temperature: 0, maxOutputTokens: 500 },
-          }),
-        }
-      );
+      const data = await callGeminiWithRetry(base64, prompt);
 
-      // Exponential backoff: 10s → 30s → 60s
-      let res = await callGemini();
-      const backoffs = [10000, 30000, 60000];
-      for (const delay of backoffs) {
-        if (res.status !== 429) break;
-        process.stdout.write(`⏳ 429, ${delay / 1000}s... `);
-        await sleep(delay);
-        res = await callGemini();
-      }
-      if (res.status === 429) {
-        console.log("⚠️  übersprungen (429 nach 3 Retries)");
+      if (data === null) {
+        skippedPages++;
         await sleep(4000); continue;
-      }
-
-      const data = await res.json();
-
-      // Hard-abort on API error (expired key, quota, etc.)
-      if (data.error) {
-        throw new Error(`Gemini API error ${data.error.code}: ${data.error.message}`);
       }
 
       if (page === 0) {
@@ -215,13 +236,18 @@ Keine Treffer: {"deals":[]}`;
       }
     } catch (e) {
       console.log(`[ERR] leaflet=${leaflet.id} page=${page} error=${e.message} stack=${e.stack?.split('\n')[0]}`);
-      if (e.message.startsWith("Gemini API error")) throw e; // propagate fatal errors
+      if (e.message.startsWith("Gemini API error")) throw e;
     }
 
     await sleep(4000);
   }
 
-  console.log(`   → ${deals.length} Deals aus "${leaflet.name}"\n`);
+  if (skippedPages > totalPages / 2 && currentModel === GEMINI_MODEL_PRIMARY) {
+    console.log(`⚠️  ${skippedPages}/${totalPages} Seiten übersprungen — Fallback auf ${GEMINI_MODEL_FALLBACK} für Rest des Runs`);
+    currentModel = GEMINI_MODEL_FALLBACK;
+  }
+
+  console.log(`   → ${deals.length} Deals aus "${leaflet.name}" (${skippedPages} Seiten übersprungen)\n`);
   return deals;
 }
 
