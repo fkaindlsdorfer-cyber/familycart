@@ -581,7 +581,7 @@ function renderDealCards(itemName,allDeals){
         <span style="font-size:18px;font-weight:700;color:#111827;">${esc(d.price||"?")}</span>
       </div>
       <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:5px;">${esc(d.title||d.articleName||"")}</div>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;${linkHtml?"margin-bottom:5px;":"}">${oldPriceHtml}${savingsHtml}${validHtml}</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;${linkHtml?"margin-bottom:5px;":""}">${oldPriceHtml}${savingsHtml}${validHtml}</div>
       ${linkHtml}
     </div>`;
   }).join("");
