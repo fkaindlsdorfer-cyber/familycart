@@ -198,8 +198,18 @@ async function scanMaximarktLeaflet(leaflet, articles) {
 Gesuchte Artikel: ${itemList}
 
 Welche dieser Artikel sind auf dieser Seite mit Preis oder Rabatt zu sehen?
+
+WICHTIGE REGELN:
+1. "1+1 GRATIS" / "2+1 GRATIS": Berechne effektiven Stückpreis als price.
+   Beispiel: Statt-Preis 1,99 EUR, "1+1 GRATIS" → price:"1,00 EUR", oldPrice:"1,99 EUR", savings:"1+1 GRATIS"
+2. "AB 2 STÜCK/PACKUNGEN/FLASCHEN": price = reduzierter Stückpreis, oldPrice = Normalpreis.
+   Beispiel: "STATT 14,99 / AB 2 FL. JE 11,99" → price:"11,99 EUR", oldPrice:"14,99 EUR", savings:"ab 2 Flaschen"
+3. "STATT X / NUR Y": price:Y, oldPrice:X.
+4. KRITISCH: Wenn price === oldPrice und keine echte Reduktion erkennbar → diesen Eintrag NICHT zurückgeben.
+5. articleName: vollständiger Produktname inkl. Marke und Variante (z.B. "Monini Olivenöl Classico", nicht "Olivenöl").
+
 Antworte NUR mit JSON – keine weiteren Texte:
-{"deals":[{"articleName":"Name exakt wie in der Suche","price":"1,99 EUR","savings":"-20%","oldPrice":"2,49 EUR"}]}
+{"deals":[{"articleName":"Vollständiger Produktname","price":"1,99 EUR","savings":"-20%","oldPrice":"2,49 EUR"}]}
 Keine Treffer: {"deals":[]}`;
 
       const data = await callGeminiWithRetry(base64, prompt);
@@ -268,6 +278,16 @@ Keine Treffer: {"deals":[]}`;
 
   console.log(`   → ${deals.length} Deals aus "${leaflet.name}" (${skippedPages} Seiten übersprungen)\n`);
   return deals;
+}
+
+// ── Deal-Validierung ─────────────────────────────────────────────────────────
+function isValidDeal(d) {
+  if (!d.articleName || !d.price) return false;
+  const p  = parseFloat(String(d.price   ).replace(",", ".").replace(/[^\d.]/g, ""));
+  const op = d.oldPrice ? parseFloat(String(d.oldPrice).replace(",", ".").replace(/[^\d.]/g, "")) : NaN;
+  if (!isFinite(p) || p <= 0) return false;
+  if (isFinite(op) && Math.abs(op - p) < 0.01 && !d.savings) return false;
+  return true;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -374,20 +394,26 @@ async function main() {
     seenDeals.add(key); return true;
   });
 
+  // ── Validierung ──────────────────────────────────────────────────────────
+  const before     = uniqueDeals.length;
+  const validDeals = uniqueDeals.filter(isValidDeal);
+  const dropped    = before - validDeals.length;
+  if (dropped > 0) console.log(`🚮 ${dropped} Fehlextraktionen verworfen (price === oldPrice oder kein Preis)`);
+
   // ── In Firebase speichern ────────────────────────────────────────────────
-  if (uniqueDeals.length > 0) {
+  if (validDeals.length > 0) {
     const dealsObj = {};
-    uniqueDeals.forEach((d, i) => { dealsObj[`deal_${Date.now()}_${i}`] = d; });
+    validDeals.forEach((d, i) => { dealsObj[`deal_${Date.now()}_${i}`] = d; });
     await db.ref("deals").set(dealsObj);
 
-    const top = uniqueDeals.slice(0, 3).map(d => `${d.articleName} bei ${d.storeName}`).join(", ");
+    const top = validDeals.slice(0, 3).map(d => `${d.articleName} bei ${d.storeName}`).join(", ");
     await db.ref("notifications").push({
-      msg:  `🔥 ${uniqueDeals.length} Aktionen gefunden! ${top}`,
+      msg:  `🔥 ${validDeals.length} Aktionen gefunden! ${top}`,
       from: "system", to: "all", id: Date.now(),
       time: new Date().toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" }),
     });
-    console.log(`\n💾 ${uniqueDeals.length} Deals gespeichert!`);
-    const maxiCount = uniqueDeals.filter(d => d.storeId === "maximarkt").length;
+    console.log(`\n💾 ${validDeals.length} Deals gespeichert!`);
+    const maxiCount = validDeals.filter(d => d.storeId === "maximarkt").length;
     if (maxiCount > 0) console.log(`   davon Maximarkt: ${maxiCount}`);
   } else {
     await db.ref("deals").set(null);
@@ -395,7 +421,7 @@ async function main() {
   }
 
   console.log("\n═══════════════════════════════════════════════════");
-  console.log(`✅ Fertig! ${uniqueDeals.length} Deals`);
+  console.log(`✅ Fertig! ${validDeals.length} Deals`);
   console.log("═══════════════════════════════════════════════════");
 }
 
