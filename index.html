@@ -280,6 +280,7 @@ let activeMarkets=null; // null = loading, array = loaded from /settings/activeM
 let storePickerCallback=null;
 let dealRefreshTimer=null;
 let lastDealRefresh=0;
+const _lf={list:"",template:"",deals:""};
 
 // ── Init ─────────────────────────────────────────────────────────────────
 function initApp(){
@@ -406,6 +407,8 @@ document.addEventListener("visibilitychange",()=>{
 function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 function storeById(id){return STORES.find(s=>s.id===id)||null;}
 function closeModal(id){document.getElementById(id).style.display="none";}
+function filterTab(key,val){_lf[key]=val.toLowerCase().trim();render();}
+function _searchBar(key,ph){const v=_lf[key];return`<div style="position:relative;margin-bottom:10px;"><input id="search-${key}" type="text" value="${esc(v)}" oninput="filterTab('${key}',this.value)" placeholder="${ph}" style="width:100%;padding:8px ${v?"32px":"12px"} 8px 12px;border:1.5px solid #E5E7EB;border-radius:10px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;background:#FAFAFA;">${v?`<button onclick="filterTab('${key}','')" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9CA3AF;font-size:18px;line-height:1;cursor:pointer;padding:0;">×</button>`:""}</div>`;}
 const GEMINI_WORKER_URL="https://familycart-gemini-proxy.fkaindls.workers.dev";
 
 function switchTab(t){
@@ -690,19 +693,21 @@ function renderShopMode(){
 }
 
 function parsePrice(p){return parseFloat((p||"").replace(",",".").replace(/[^\d.]/g,""))||Infinity;}
+function tokenize(s){return(s||"").toLowerCase().replace(/[^\wäöüß\s-]/g," ").split(/[\s-]+/).filter(t=>t.length>=4);}
 function findDeals(itemName,allDeals){
   if(!itemName)return[];
-  const needle=itemName.toLowerCase().trim();
-  if(needle.length<3)return[];
+  const itemTokens=tokenize(itemName);
+  if(!itemTokens.length)return[];
   return allDeals.filter(d=>{
-    const haystack=(d.articleName||"").toLowerCase();
-    return haystack.includes(needle)||needle.includes(haystack);
+    const haystackTokens=tokenize(`${d.articleName||""} ${d.title||""}`);
+    return itemTokens.some(it=>haystackTokens.includes(it));
   });
 }
 
 // ── Render ─────────────────────────────────────────────────────────────────
 function render(){
   if(!currentUser)return;
+  const _focusId=document.activeElement?.id;
   populateSelects();
   const items=Object.entries(state.items||{}).map(([k,v])=>({...v,fbKey:k})).sort((a,b)=>b.id-a.id);
   const tmpl=Object.entries(state.template||{}).map(([k,v])=>({...v,fbKey:k})).sort((a,b)=>b.id-a.id);
@@ -730,6 +735,8 @@ function render(){
   else if(listSort==="cat")   sortedItems.sort((a,b)=>(a.cat||"").localeCompare(b.cat||"","de")||a.name.localeCompare(b.name,"de"));
   else if(listSort==="store") sortedItems.sort((a,b)=>(a.storeId||"zzz").localeCompare(b.storeId||"zzz")||a.name.localeCompare(b.name,"de"));
 
+  const _lf_list=_lf.list;
+  if(_lf_list)sortedItems=sortedItems.filter(item=>`${item.name||""} ${item.note||""} ${item.cat||""}`.toLowerCase().includes(_lf_list));
   const doneCount=items.filter(i=>i.done).length;
 
   const renderListItem=(item,i)=>{
@@ -797,13 +804,15 @@ function render(){
     else listHtml=sortedItems.map((item,i)=>renderListItem(item,i)).join("");
   }
 
-  document.getElementById("tab-list").innerHTML=sortBar+listHtml;
+  document.getElementById("tab-list").innerHTML=_searchBar("list","🔍 Artikel suchen...")+sortBar+listHtml;
 
 // ── TEMPLATE – grouped by store ──
   const tmplBought=tmpl.filter(i=>i.bought).length;
+  const _lf_tmpl=_lf.template;
+  const filtTmpl=_lf_tmpl?tmpl.filter(item=>`${item.name||""} ${item.note||""}`.toLowerCase().includes(_lf_tmpl)):tmpl;
   // Group by storeId
   const byStore={};const noStore=[];
-  tmpl.forEach(item=>{
+  filtTmpl.forEach(item=>{
     const sid=item.storeId||"";
     if(sid){if(!byStore[sid])byStore[sid]=[];byStore[sid].push(item);}
     else noStore.push(item);
@@ -856,7 +865,7 @@ function render(){
       ${noStore.sort((a,b)=>a.name.localeCompare(b.name)).map(renderTmplItem).join("")}
     </div>`;
   }
-  document.getElementById("tab-template").innerHTML=tmplHtml;
+  document.getElementById("tab-template").innerHTML=_searchBar("template","🔍 Einkaufsliste suchen...")+tmplHtml;
 
   // ── DEALS ──
   const maximarktUploadSection=`
@@ -873,11 +882,13 @@ function render(){
       <div id="maximarktStatus" style="margin-top:8px;"></div>
     </div>`;
 
+  const _lf_deals=_lf.deals;
+  const filtDeals=_lf_deals?deals.filter(d=>`${d.articleName||""} ${d.title||""} ${d.storeName||""}`.toLowerCase().includes(_lf_deals)):deals;
   const dealsHtml = activeMarkets===null
     ? [80,60,72,50,65].map(w=>`<div style="background:white;border-radius:15px;padding:14px;margin-bottom:8px;"><div style="height:14px;width:${w}%;background:#F3F4F6;border-radius:6px;animation:pulse 1.2s ease-in-out infinite;"></div><div style="height:10px;width:40%;background:#F3F4F6;border-radius:6px;margin-top:10px;animation:pulse 1.2s ease-in-out infinite;"></div></div>`).join("")
-    : deals.length === 0
+    : filtDeals.length === 0
     ? `<div style="text-align:center;color:#9CA3AF;padding:44px 0;"><div style="font-size:40px;">🏷️</div><p style="margin-top:8px;">Keine aktuellen Aktionen</p><p style="font-size:12px;margin-top:4px;">Das Skript sucht täglich nachts automatisch</p><a href="https://www.marktguru.at/angebote" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;margin-top:16px;padding:11px 20px;background:#1C2B1A;color:white;text-decoration:none;border-radius:12px;font-size:13px;font-weight:700;">🌐 Auf marktguru.at suchen →</a></div>`
-    : deals.map(d=>{
+    : filtDeals.map(d=>{
       const store=storeById(d.storeId);
       const link=d.url||mgUrl(d.articleName||"");
       return `<div style="background:white;border-radius:15px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,0.06);margin-bottom:8px;">
@@ -897,7 +908,7 @@ function render(){
       </div>`;
     }).join("");
 
-  document.getElementById("tab-deals").innerHTML=maximarktUploadSection+dealsHtml;
+  document.getElementById("tab-deals").innerHTML=maximarktUploadSection+_searchBar("deals","🔍 Aktion suchen...")+dealsHtml;
 
   // ── NOTIFS (fixed: filter by to===currentUser) ──
   document.getElementById("tab-notifs").innerHTML=notifs.length===0
@@ -917,6 +928,8 @@ function render(){
 
   // Update shopping mode if open
   if(document.getElementById("shopMode").classList.contains("active")) renderShopMode();
+  // Restore search focus after re-render
+  if(_focusId&&_focusId.startsWith("search-")){const _el=document.getElementById(_focusId);if(_el){_el.focus();try{_el.setSelectionRange(_el.value.length,_el.value.length);}catch(e){}}}
 }
 
 // ── Maximarkt Flugblatt PDF Upload ────────────────────────────────────────
