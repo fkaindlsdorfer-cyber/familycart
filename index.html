@@ -218,6 +218,7 @@ input,select,textarea,button{font-family:'DM Sans',sans-serif;}
     <button onclick="document.getElementById('editImageInput').click()" class="tap" style="width:100%;padding:10px;background:#F3F4F6;border:1.5px dashed #D1D5DB;border-radius:11px;font-size:12px;color:#6B7280;cursor:pointer;margin-bottom:10px;">📷 Foto / Bild auswählen</button>
     <input type="file" id="editImageInput" accept="image/*" style="display:none;" onchange="handleImageUpload(this)">
     <div id="dealSearchArea"></div>
+    <button onclick="openMarktguruSearch()" class="tap" style="width:100%;padding:10px 0;background:#1C2B1A;color:white;border:none;border-radius:10px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:8px;cursor:pointer;">🌐 Auf marktguru.at suchen →</button>
     <div style="display:flex;gap:8px;margin-top:10px;">
       <button onclick="submitEdit()" class="btn-dark tap" style="margin-bottom:0;">Speichern ✓</button>
       <button onclick="closeModal('editModal')" class="btn-light tap" style="margin-bottom:0;">Abbrechen</button>
@@ -564,6 +565,7 @@ function submitEdit(){
 
 // ── Deal cards (Firebase-based, unified) ───────────────────────────────────
 function mgUrl(name){return`https://www.marktguru.at/search/${encodeURIComponent((name||"").toLowerCase())}`;}
+function openMarktguruSearch(){const n=(document.getElementById("editName")?.value||"").trim();window.open(n?`https://www.marktguru.at/search/${encodeURIComponent(n)}`:"https://www.marktguru.at","_blank","noopener");}
 
 function renderDealCards(itemName,allDeals){
   const matched=findDeals(itemName,allDeals);
@@ -572,9 +574,10 @@ function renderDealCards(itemName,allDeals){
     const store=storeById(d.storeId);
     const sc=store?store.color:"#374151";
     const isLeaflet=(d.source||"").toLowerCase().includes("leaflet");
-    const linkHtml=(!isLeaflet&&d.url&&d.url.startsWith("http"))
-      ?`<a href="${esc(d.url)}" target="_blank" rel="noopener" style="font-size:11px;color:#6D28D9;font-weight:600;">→ auf marktguru ansehen</a>`
-      :isLeaflet?`<span style="font-size:11px;color:#9CA3AF;">aus Prospekt-Scan</span>`:"";
+    const linkHtml=isLeaflet
+      ?`<a href="https://www.marktguru.at/search/${encodeURIComponent(d.articleName||"")}" target="_blank" rel="noopener" style="font-size:11px;color:#6B7280;">🔍 auf marktguru suchen</a>`
+      :(d.url&&d.url.startsWith("http"))?`<a href="${esc(d.url)}" target="_blank" rel="noopener" style="font-size:11px;color:#6D28D9;font-weight:600;">→ auf marktguru ansehen</a>`
+      :"";
     const savingsHtml=d.savings?`<span style="font-size:11px;padding:2px 7px;border-radius:6px;background:#DCFCE7;color:#166534;font-weight:700;">${esc(d.savings)}</span>`:"";
     const oldPriceHtml=(d.oldPrice&&d.oldPrice!==d.price)?`<span style="font-size:12px;text-decoration:line-through;color:#9CA3AF;">${esc(d.oldPrice)}</span>`:"";
     const validHtml=d.validUntil?`<span style="font-size:11px;color:#9CA3AF;">⏳ bis ${esc(d.validUntil.split("T")[0])}</span>`:"";
@@ -611,7 +614,6 @@ function refreshDealArea(name){
   area.innerHTML=`<div style="margin-top:10px;animation:expandIn .2s ease;">
     <div style="font-size:12px;font-weight:700;color:#111827;margin-bottom:8px;">✨ Aktionen gefunden</div>
     ${renderDealCards(name,deals)}
-    <a href="${mgUrl(name)}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:10px 0;background:#1C2B1A;color:white;text-decoration:none;border-radius:10px;font-size:12px;font-weight:700;margin-top:4px;">🌐 Auf marktguru.at suchen →</a>
   </div>`;
 }
 
