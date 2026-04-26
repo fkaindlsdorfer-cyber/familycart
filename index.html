@@ -263,7 +263,7 @@ const MARKET_GROUPS=[
   {key:"drogerie", label:"Drogerie"},
   {key:"baumarkt", label:"Baumarkt"},
 ];
-const CATS=["🥦 Obst & Gemüse","🥩 Fleisch & Fisch","🧀 Milchprodukte","🍞 Backwaren","🧴 Hygiene","🥫 Vorrat","🍷 Getränke","❓ Sonstiges"];
+const CATS=["🥦 Obst & Gemüse","🥩 Fleisch & Wurst","🐟 Fisch","🍝 Nudeln & Reis","🥨 Snacks","🍫 Süßes","🥫 Vorrat","🧀 Milchprodukte","🍷 Getränke","🍞 Backwaren","🧴 Hygiene & Reinigung","❓ Sonstiges"];
 const USERS={du:{name:"Flo",emoji:"🧑",color:"#3b82f6"},frau:{name:"Vicy",emoji:"👩",color:"#ec4899"}};
 const FB_CFG={
   apiKey:"AIzaSyAt53pLIrojwDFtg4xZiDi1sjs2o3pyqK0",
@@ -520,7 +520,9 @@ function openEditModal(key,type){
   document.getElementById("editUnit").value=data.unit||"";
   document.getElementById("editNote").value=data.note||"";
   populateSelects();
-  document.getElementById("editCat").value=data.cat||CATS[7];
+  const _ec=document.getElementById("editCat"),_cv=data.cat||CATS[CATS.length-1];
+  if(_cv&&!CATS.includes(_cv)){_ec.insertAdjacentHTML("afterbegin",`<option value="${_cv}" selected style="font-style:italic;">${_cv} (alt)</option>`);}
+  else{_ec.value=_cv;}
   document.getElementById("editStore").value=data.storeId||"";
   document.getElementById("editImagePreview").innerHTML=editImageData
     ?`<div style="position:relative;display:inline-block;"><img src="${editImageData}" style="width:72px;height:72px;border-radius:12px;object-fit:cover;"><button onclick="removeImage()" style="position:absolute;top:-6px;right:-6px;background:#EF4444;border:none;border-radius:50%;width:20px;height:20px;color:white;font-size:13px;cursor:pointer;">×</button></div>`
