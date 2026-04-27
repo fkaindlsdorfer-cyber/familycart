@@ -1,0 +1,1670 @@
+{
+  "skip_duplicates": [
+    "Schlagobers",
+    "Pizza",
+    "gemahlene Haselnüsse",
+    "Actimel",
+    "Aperol",
+    "Äpfel",
+    "Artischocken",
+    "Atterseer pikant",
+    "Aubergine",
+    "Backerbsen",
+    "Backpulver",
+    "Bad reiniger",
+    "Badeschaum",
+    "Baguette",
+    "Bambussprossen",
+    "Bananen",
+    "Barilla",
+    "Benco kakao",
+    "Bergsteiger",
+    "Berner",
+    "Bier",
+    "Birnen",
+    "Biskotten",
+    "Blätterteig",
+    "Bratwürste",
+    "Brokkoli frisch",
+    "Butter",
+    "Butterkekse",
+    "Butterschmalz",
+    "Champignons",
+    "Cornflakes ungesüßt",
+    "Currypulver",
+    "Dinkelmehl",
+    "Duplo",
+    "Duschgel",
+    "Essig",
+    "Faschiertes",
+    "Fisch",
+    "Fischstäbchen",
+    "Frankfurter",
+    "Frischhaltefolie",
+    "Gebäck",
+    "Gemahlene Mandeln",
+    "Geschirrspülsalz",
+    "Gesichtsreinigung",
+    "Gurke",
+    "Haarpflege",
+    "Himbeermarmelade fein passiert",
+    "Himbeersaft",
+    "Hühnerfilet",
+    "Hühnerfleisch",
+    "Joghurt",
+    "Kamillentee",
+    "Karotten",
+    "Käse",
+    "Käsekrainer",
+    "Katjes",
+    "Katzenstreu",
+    "Kekse",
+    "Ketchup",
+    "Kinder country",
+    "Kinderschokolade",
+    "Kindersekt",
+    "Kiwi",
+    "Knabbernossi",
+    "Knoblauch",
+    "Kochschokolade",
+    "Kokosfett",
+    "Kokosmilch",
+    "Kotelett",
+    "Kraut",
+    "Kren",
+    "Kristallzucker",
+    "Kroketten",
+    "Lachs",
+    "Lasagneblätter",
+    "Lauch",
+    "Leberkäse",
+    "Lebkuchen",
+    "Maggi",
+    "Mais",
+    "Maizena",
+    "Mehl glatt",
+    "Milch",
+    "Minutensteaks",
+    "Moosbacher Käse",
+    "Mozzarella",
+    "Nektarinen",
+    "Nudeln",
+    "Oliven",
+    "Olivenöl",
+    "Orangensaft",
+    "Oregano",
+    "Paprika",
+    "Pasta Asciuta Gewürz",
+    "Pepsi",
+    "Pfirsiche",
+    "PH minus",
+    "Pilze",
+    "Pizzakäse",
+    "Pom-Bär",
+    "Pomito",
+    "Pommes",
+    "Putenfleisch",
+    "Salat",
+    "Seitlinge",
+    "Soletti",
+    "Spargel grün",
+    "Tk Brokkoli",
+    "Wassermelone",
+    "Zahnpasta"
+  ],
+  "to_import": [
+    {
+      "name": "Marillenmarmelade fein passiert",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Pombären crizzlies",
+      "cat": "🥨 Snacks",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Schokodekor",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Schokoglasur",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Staubzucker",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Vanillezucker",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "gehackte Haselnüsse (geröstete)",
+      "cat": "🥨 Snacks",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Alpaka Gummis Katjes",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Amaretto",
+      "cat": "🍷 Getränke",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Apfelessig",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Baileys",
+      "cat": "🍷 Getränke",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Balsamico creme",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Balsamico Essig",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Bio Orangen",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Bratfleisch",
+      "cat": "🥩 Fleisch & Wurst",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Brezel hofer",
+      "cat": "🥨 Snacks",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Brezel soletti",
+      "cat": "🥨 Snacks",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Kuchenglasur bunt",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Buntwaschmittel frosch",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Burger patties",
+      "cat": "🥩 Fleisch & Wurst",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Burger Semmeln",
+      "cat": "🍞 Backwaren",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Cheddar in Scheiben",
+      "cat": "🧀 Milchprodukte",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Chips",
+      "cat": "🥨 Snacks",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Chocos",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Creme fraiche",
+      "cat": "🧀 Milchprodukte",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Curry Sauce",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Entkalker Kaffeemaschine",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Entkalkung Miele Dampfgarer",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Erdbeermarmale oma staud",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Erkältungsbad",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Essiggurken",
+      "cat": "🥦 Obst & Gemüse",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Faschingskrapfen",
+      "cat": "🍞 Backwaren",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Feinwaschmittel frosch",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Filet steak",
+      "cat": "🥩 Fleisch & Wurst",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Fishermen's",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Fleisch",
+      "cat": "🥩 Fleisch & Wurst",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Frischkäse natur",
+      "cat": "🧀 Milchprodukte",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Frivissa Frittierfett",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Fruchtmüsli Himbeer weiße Schoko",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Garnelen",
+      "cat": "🐟 Fisch",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Gelierzucker 2:1",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Germ frisch",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Gummibären normal",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Gummibären Sackerl klein",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Haferflocken fein/zart",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Hagelzucker",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Haribo Limone",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Haribos",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Heidelbeeren",
+      "cat": "🥦 Obst & Gemüse",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Hendlhaxerl",
+      "cat": "🥩 Fleisch & Wurst",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Jause",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Kakao",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Kaktuseis",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Kartoffeln festkochend",
+      "cat": "🥦 Obst & Gemüse",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Kellys Chips",
+      "cat": "🥨 Snacks",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Kinder Duplo",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Kinder Zahnpasta",
+      "cat": "🍝 Nudeln & Reis",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Klarspüler",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Knabbersachen",
+      "cat": "🥨 Snacks",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Knoblauchpulver",
+      "cat": "🥦 Obst & Gemüse",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Kopfschmerztabletten",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Kräuterbaguette",
+      "cat": "🍞 Backwaren",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Küchenrollen",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Labello",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Lachgummis Happies",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Lavazza",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Loidl Käsewurst",
+      "cat": "🧀 Milchprodukte",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Mandeln gemahlen",
+      "cat": "🥨 Snacks",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Manner mignon schnitten",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Manner snacks milchcreme",
+      "cat": "🧀 Milchprodukte",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Mascarpone",
+      "cat": "🧀 Milchprodukte",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Melone",
+      "cat": "🥦 Obst & Gemüse",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Misopaste",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Nasenspray",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Nüsse",
+      "cat": "🥨 Snacks",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Oktopus",
+      "cat": "🐟 Fisch",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Oliven mit Mandel",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Orzo nudeln",
+      "cat": "🍝 Nudeln & Reis",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Paprikapulver",
+      "cat": "🥦 Obst & Gemüse",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Pfeiflutscher",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Popkorn Mikrowelle",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Puddingeier",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Puffoletti",
+      "cat": "🥨 Snacks",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Putenschinken",
+      "cat": "🥩 Fleisch & Wurst",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Putenschnitzel",
+      "cat": "🥩 Fleisch & Wurst",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Putzschwamm",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Raclettekäse",
+      "cat": "🧀 Milchprodukte",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Radler",
+      "cat": "🍷 Getränke",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Radler alkoholfrei",
+      "cat": "🍷 Getränke",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Rapsöl kaltgepresst",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Rasierer",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Reinigungsmaske",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Reisnudeln",
+      "cat": "🍝 Nudeln & Reis",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "spare ribs",
+      "cat": "🥩 Fleisch & Wurst",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Rotkraut",
+      "cat": "🥦 Obst & Gemüse",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Sackerl Popcorn",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Säfte",
+      "cat": "🍷 Getränke",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Sahne",
+      "cat": "🧀 Milchprodukte",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Salami",
+      "cat": "🥩 Fleisch & Wurst",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Salzstangerl",
+      "cat": "🥨 Snacks",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Satsumas",
+      "cat": "🥦 Obst & Gemüse",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Sauerkraut",
+      "cat": "🥦 Obst & Gemüse",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Sauerrahm",
+      "cat": "🧀 Milchprodukte",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Schinken",
+      "cat": "🥩 Fleisch & Wurst",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Schinkenspeck",
+      "cat": "🥩 Fleisch & Wurst",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Schnur Haribos",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Schokolade Milka",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Schoko waffelröllchen",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Schokobons",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Schokostreusel",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Schweinefilet",
+      "cat": "🥩 Fleisch & Wurst",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Schweppes Wild berry",
+      "cat": "🍷 Getränke",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Sellerie",
+      "cat": "🥦 Obst & Gemüse",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Semmelbrösel",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Servietten",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Sesam",
+      "cat": "🥨 Snacks",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Silbershampoo",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Skittles",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Smarties",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Smarties erdbeer",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Sonnenblumenöl",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Spaghetti Nudeln",
+      "cat": "🍝 Nudeln & Reis",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Spinat",
+      "cat": "🥦 Obst & Gemüse",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Sprühsahne",
+      "cat": "🧀 Milchprodukte",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Spülbürste",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Spülmittel",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Suppennudeln Buchstaben",
+      "cat": "🍝 Nudeln & Reis",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Suppenwürze",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Surbratl",
+      "cat": "🥩 Fleisch & Wurst",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Surfleisch",
+      "cat": "🥩 Fleisch & Wurst",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Sushi",
+      "cat": "🐟 Fisch",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Süßstoff",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Taschentücher",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Taschentücher Boxen",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Tictac",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Tk fische",
+      "cat": "🐟 Fisch",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Tk fisolen",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Tk Himbeere",
+      "cat": "🥦 Obst & Gemüse",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Tk Pizza",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Toast",
+      "cat": "🍞 Backwaren",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Toastkäse",
+      "cat": "🧀 Milchprodukte",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Toastschinken",
+      "cat": "🥩 Fleisch & Wurst",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Tomaten",
+      "cat": "🥦 Obst & Gemüse",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Tomatenmark",
+      "cat": "🥦 Obst & Gemüse",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Topfen",
+      "cat": "🧀 Milchprodukte",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Tunfisch",
+      "cat": "🐟 Fisch",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Tunfisch Italien",
+      "cat": "🐟 Fisch",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Vanilleeis",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Vanillepuddingpulver",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Verival Bio Crunchy Dinkel (Müsli)",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Vollmilchschokolade",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Waffelbecher schoko",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Wärmepflaster",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Wattepads",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Wc Spray",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Wedges",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Weintrauben",
+      "cat": "🥦 Obst & Gemüse",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Weißwein",
+      "cat": "🍷 Getränke",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Weißweinessig",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Weizengrieß",
+      "cat": "🍞 Backwaren",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Weizenmehl glatt",
+      "cat": "🍞 Backwaren",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Wetex",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Wiener knusperbraten",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Wraps",
+      "cat": "🍝 Nudeln & Reis",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Yoghurette",
+      "cat": "🍫 Süßes",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Zahnbürste",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Zimt gemahlen",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Zimtstangen",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Zitronen",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Zucchini",
+      "cat": "🥦 Obst & Gemüse",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Zwiebel",
+      "cat": "🥦 Obst & Gemüse",
+      "qty": "1",
+      "unit": "",
+      "done": false
+    },
+    {
+      "name": "Algenschutz",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false,
+      "storeId": ""
+    },
+    {
+      "name": "Biomüll Gemeinde",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false,
+      "storeId": ""
+    },
+    {
+      "name": "Erde",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false,
+      "storeId": ""
+    },
+    {
+      "name": "Felgenreiniger",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false,
+      "storeId": ""
+    },
+    {
+      "name": "Gelbe säcke gemeinde",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false,
+      "storeId": ""
+    },
+    {
+      "name": "H&M Badeanzüge, Ponchos, Socken Mia",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false,
+      "storeId": ""
+    },
+    {
+      "name": "Knopfbatterie",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false,
+      "storeId": ""
+    },
+    {
+      "name": "Rhododendron Dünger",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false,
+      "storeId": ""
+    },
+    {
+      "name": "Sackerl Biomüll 20l",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false,
+      "storeId": ""
+    },
+    {
+      "name": "Seil für Gräser",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false,
+      "storeId": ""
+    },
+    {
+      "name": "Straßenkreiden",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false,
+      "storeId": ""
+    },
+    {
+      "name": "Trockenfutter",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false,
+      "storeId": ""
+    },
+    {
+      "name": "Uhu Stick",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false,
+      "storeId": ""
+    },
+    {
+      "name": "Vogelfutter",
+      "cat": "❓ Sonstiges",
+      "qty": "1",
+      "unit": "",
+      "done": false,
+      "storeId": ""
+    },
+    {
+      "name": "Rama",
+      "cat": "🧀 Milchprodukte",
+      "qty": "1",
+      "unit": "",
+      "done": false,
+      "storeId": ""
+    },
+    {
+      "name": "Cola",
+      "cat": "🍷 Getränke",
+      "qty": "1",
+      "unit": "",
+      "done": false,
+      "storeId": ""
+    },
+    {
+      "name": "Deo",
+      "cat": "🧴 Hygiene & Reinigung",
+      "qty": "1",
+      "unit": "",
+      "done": false,
+      "storeId": ""
+    },
+    {
+      "name": "Salz",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false,
+      "storeId": ""
+    },
+    {
+      "name": "Senf",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false,
+      "storeId": ""
+    },
+    {
+      "name": "Parmesan",
+      "cat": "🧀 Milchprodukte",
+      "qty": "1",
+      "unit": "",
+      "done": false,
+      "storeId": ""
+    },
+    {
+      "name": "Pinienkerne",
+      "cat": "🥫 Vorrat",
+      "qty": "1",
+      "unit": "",
+      "done": false,
+      "storeId": ""
+    }
+  ],
+  "needs_decision": [
+    {
+      "name": "Algenschutz",
+      "reason": "Nicht-Lebensmittel",
+      "suggestion": "weglassen",
+      "cat": "❓ Sonstiges"
+    },
+    {
+      "name": "Biomüll Gemeinde",
+      "reason": "Nicht-Lebensmittel",
+      "suggestion": "weglassen",
+      "cat": "❓ Sonstiges"
+    },
+    {
+      "name": "Erde",
+      "reason": "Nicht-Lebensmittel",
+      "suggestion": "weglassen",
+      "cat": "❓ Sonstiges"
+    },
+    {
+      "name": "Felgenreiniger",
+      "reason": "Nicht-Lebensmittel",
+      "suggestion": "weglassen",
+      "cat": "❓ Sonstiges"
+    },
+    {
+      "name": "Gelbe säcke gemeinde",
+      "reason": "Nicht-Lebensmittel",
+      "suggestion": "weglassen",
+      "cat": "❓ Sonstiges"
+    },
+    {
+      "name": "H&M Badeanzüge, Ponchos, Socken Mia",
+      "reason": "Nicht-Lebensmittel",
+      "suggestion": "weglassen",
+      "cat": "❓ Sonstiges"
+    },
+    {
+      "name": "Knopfbatterie",
+      "reason": "Nicht-Lebensmittel",
+      "suggestion": "weglassen",
+      "cat": "❓ Sonstiges"
+    },
+    {
+      "name": "Rhododendron Dünger",
+      "reason": "Nicht-Lebensmittel",
+      "suggestion": "weglassen",
+      "cat": "❓ Sonstiges"
+    },
+    {
+      "name": "Sackerl Biomüll 20l",
+      "reason": "Nicht-Lebensmittel",
+      "suggestion": "weglassen",
+      "cat": "❓ Sonstiges"
+    },
+    {
+      "name": "Seil für Gräser",
+      "reason": "Nicht-Lebensmittel",
+      "suggestion": "weglassen",
+      "cat": "❓ Sonstiges"
+    },
+    {
+      "name": "Straßenkreiden",
+      "reason": "Nicht-Lebensmittel",
+      "suggestion": "weglassen",
+      "cat": "❓ Sonstiges"
+    },
+    {
+      "name": "Trockenfutter",
+      "reason": "Nicht-Lebensmittel",
+      "suggestion": "weglassen",
+      "cat": "❓ Sonstiges"
+    },
+    {
+      "name": "Uhu Stick",
+      "reason": "Nicht-Lebensmittel",
+      "suggestion": "weglassen",
+      "cat": "❓ Sonstiges"
+    },
+    {
+      "name": "Vogelfutter",
+      "reason": "Nicht-Lebensmittel",
+      "suggestion": "weglassen",
+      "cat": "❓ Sonstiges"
+    },
+    {
+      "name": "Rama",
+      "reason": "Anomalie",
+      "suggestion": "prüfen",
+      "cat": "🧀 Milchprodukte"
+    },
+    {
+      "name": "Cola",
+      "reason": "Anomalie",
+      "suggestion": "prüfen",
+      "cat": "🍷 Getränke"
+    },
+    {
+      "name": "Deo",
+      "reason": "Anomalie",
+      "suggestion": "prüfen",
+      "cat": "🧴 Hygiene & Reinigung"
+    },
+    {
+      "name": "Kekse Zoo",
+      "reason": "Anomalie",
+      "suggestion": "prüfen (abgeschnitten?)",
+      "cat": "🍫 Süßes"
+    },
+    {
+      "name": "Natur pur Bio Vollkorn cracker Dinkel und Käse",
+      "reason": "Anomalie",
+      "suggestion": "prüfen (abgeschnitten?)",
+      "cat": "🧀 Milchprodukte"
+    },
+    {
+      "name": "Obst",
+      "reason": "Anomalie",
+      "suggestion": "prüfen",
+      "cat": "🥦 Obst & Gemüse"
+    },
+    {
+      "name": "Oral b aufsätz",
+      "reason": "Anomalie",
+      "suggestion": "prüfen (abgeschnitten?)",
+      "cat": "🧴 Hygiene & Reinigung"
+    },
+    {
+      "name": "Salz",
+      "reason": "Anomalie",
+      "suggestion": "prüfen",
+      "cat": "🥫 Vorrat"
+    },
+    {
+      "name": "Salz Geschirrspüler",
+      "reason": "Anomalie",
+      "suggestion": "prüfen (abgeschnitten?)",
+      "cat": "🧴 Hygiene & Reinigung"
+    },
+    {
+      "name": "Senf",
+      "reason": "Anomalie",
+      "suggestion": "prüfen",
+      "cat": "🥫 Vorrat"
+    },
+    {
+      "name": "Soletti happy mix",
+      "reason": "Anomalie",
+      "suggestion": "prüfen (abgeschnitten?)",
+      "cat": "🥨 Snacks"
+    },
+    {
+      "name": "Sriracha sauce grün",
+      "reason": "Anomalie",
+      "suggestion": "prüfen (abgeschnitten?)",
+      "cat": "❓ Sonstiges"
+    },
+    {
+      "name": "Tabs Geschirrspüler",
+      "reason": "Anomalie",
+      "suggestion": "prüfen (abgeschnitten?)",
+      "cat": "🧴 Hygiene & Reinigung"
+    },
+    {
+      "name": "Cornett mini maximarkt",
+      "reason": "Anlass/Store-Notiz",
+      "suggestion": "generischeren Namen überlegen",
+      "cat": "❓ Sonstiges"
+    },
+    {
+      "name": "Laugenbrezel große hofer",
+      "reason": "Anlass/Store-Notiz",
+      "suggestion": "generischeren Namen überlegen",
+      "cat": "🥨 Snacks"
+    },
+    {
+      "name": "Parmesan Aktion",
+      "reason": "Anlass/Store-Notiz",
+      "suggestion": "als \"Parmesan\" importieren",
+      "cat": "🧀 Milchprodukte"
+    },
+    {
+      "name": "Pinienkerne Aktion",
+      "reason": "Anlass/Store-Notiz",
+      "suggestion": "als \"Pinienkerne\" importieren",
+      "cat": "❓ Sonstiges"
+    }
+  ]
+}

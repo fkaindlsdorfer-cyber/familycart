@@ -1,0 +1,41 @@
+name: Apply Import
+
+on:
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: 'Dry-Run (true = nur loggen, kein Schreiben)'
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: cd scripts && npm install
+
+      - name: Run import
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ "${{ inputs.dryRun }}" = "true" ]; then
+            cd scripts && node apply-import.js --dry-run
+          else
+            cd scripts && node apply-import.js
+          fi
+
+      - name: Upload pre-import backup
+        if: ${{ inputs.dryRun == false }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pre-import-backup-${{ github.run_id }}
+          path: backups/items_pre-import_*.json
+          if-no-files-found: error
