@@ -275,7 +275,7 @@ const FB_CFG={
   appId:"1:77318998625:web:324c77a07d849b2df27820"
 };
 
-let db=null, currentUser=null, currentTab="list", addTarget="list", listSort="default";
+let db=null, currentUser=null, currentTab="list", addTarget="list", listSort="default", shoppingSort="default";
 let state={items:{},template:{},deals:{},notifications:{},activeMarkets:null};
 let activeMarkets=null; // null = loading, array = loaded from /settings/activeMarkets
 let storePickerCallback=null;
@@ -708,6 +708,12 @@ function findDeals(itemName,allDeals){
   });
 }
 
+function sortItems(arr,sortKey){
+  if(sortKey==="alpha")  arr.sort((a,b)=>a.name.localeCompare(b.name,"de"));
+  else if(sortKey==="cat")   arr.sort((a,b)=>(a.cat||"").localeCompare(b.cat||"","de")||a.name.localeCompare(b.name,"de"));
+  else if(sortKey==="store") arr.sort((a,b)=>(a.storeId||"zzz").localeCompare(b.storeId||"zzz")||a.name.localeCompare(b.name,"de"));
+}
+
 // ── Render ─────────────────────────────────────────────────────────────────
 function render(){
   if(!currentUser)return;
@@ -735,9 +741,7 @@ function render(){
   // ── LIST ──
   // Sort
   let sortedItems=[...items];
-  if(listSort==="alpha")  sortedItems.sort((a,b)=>a.name.localeCompare(b.name,"de"));
-  else if(listSort==="cat")   sortedItems.sort((a,b)=>(a.cat||"").localeCompare(b.cat||"","de")||a.name.localeCompare(b.name,"de"));
-  else if(listSort==="store") sortedItems.sort((a,b)=>(a.storeId||"zzz").localeCompare(b.storeId||"zzz")||a.name.localeCompare(b.name,"de"));
+  sortItems(sortedItems, listSort);
 
   const _lf_list=_lf.list;
   if(_lf_list)sortedItems=sortedItems.filter(item=>`${item.name||""} ${item.note||""} ${item.cat||""}`.toLowerCase().includes(_lf_list));
@@ -810,19 +814,13 @@ function render(){
 
   document.getElementById("tab-list").innerHTML=_searchBar("list","🔍 Artikel suchen...")+sortBar+listHtml;
 
-// ── TEMPLATE – grouped by store ──
+// ── TEMPLATE ──
   const tmplBought=tmpl.filter(i=>i.bought).length;
   const _lf_tmpl=_lf.template;
   const filtTmpl=_lf_tmpl?tmpl.filter(item=>`${item.name||""} ${item.note||""}`.toLowerCase().includes(_lf_tmpl)):tmpl;
-  // Group by storeId
-  const byStore={};const noStore=[];
-  filtTmpl.forEach(item=>{
-    const sid=item.storeId||"";
-    if(sid){if(!byStore[sid])byStore[sid]=[];byStore[sid].push(item);}
-    else noStore.push(item);
-  });
+  let sortedTmpl=[...filtTmpl];
+  sortItems(sortedTmpl, shoppingSort);
   const renderTmplItem=item=>{
-    const store=storeById(item.storeId);
     return `<div style="background:${item.bought?"#F5F5F0":"white"};border-radius:13px;padding:11px 13px;box-shadow:${item.bought?"none":"0 2px 8px rgba(0,0,0,0.06)"};opacity:${item.bought?.6:1};margin-bottom:6px;display:flex;align-items:center;gap:10px;transition:opacity .2s;">
       <button onclick="toggleTemplate('${item.fbKey}')" class="tap" style="width:26px;height:26px;border-radius:8px;flex-shrink:0;border:none;background:${item.bought?"#6D28D9":"white"};box-shadow:${item.bought?"none":"inset 0 0 0 2px #D1D5DB"};display:flex;align-items:center;justify-content:center;cursor:pointer;">
         ${item.bought?"<span style='color:white;font-size:12px;font-weight:700;'>✓</span>":""}
@@ -835,6 +833,12 @@ function render(){
       <button onclick="deleteTemplate('${item.fbKey}')" class="tap" style="background:none;border:none;color:#D1D5DB;font-size:16px;padding:0;cursor:pointer;">×</button>
     </div>`;
   };
+  const tmplSortBar=`<div style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+    <span style="font-size:10px;color:#9CA3AF;font-weight:600;white-space:nowrap;">Sortierung:</span>
+    ${[["default","🕐 Neu"],["alpha","🔤 A–Z"],["cat","📂 Kategorie"],["store","🏪 Markt"]].map(([k,l])=>
+      `<button onclick="shoppingSort='${k}';render()" style="padding:4px 10px;border-radius:14px;border:none;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;background:${shoppingSort===k?"#1C2B1A":"#EEEEE8"};color:${shoppingSort===k?"white":"#6B7280"};">${l}</button>`
+    ).join("")}
+  </div>`;
   let tmplHtml=`<div style="background:linear-gradient(135deg,#4C1D95,#6D28D9);border-radius:16px;padding:14px 16px;margin-bottom:14px;">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
       <span style="font-size:22px;">📌</span>
@@ -848,28 +852,27 @@ function render(){
       <button onclick="resetTemplate()" class="tap" style="flex:1;padding:8px 0;background:rgba(255,255,255,0.15);border:none;border-radius:9px;color:white;font-size:11px;font-weight:600;cursor:pointer;">🔄 Alle zurücksetzen</button>
     </div>
   </div>`;
-  if(tmpl.length===0) tmplHtml+=`<div style="text-align:center;color:#9CA3AF;padding:44px 0;"><div style="font-size:40px;">📌</div><div style="margin-top:8px;font-weight:500;">Noch keine Artikel</div><div style="font-size:12px;margin-top:4px;">In der Liste auf 📌 tippen</div></div>`;
-  // Render each store group
-  Object.entries(byStore).forEach(([sid,items])=>{
-    const store=storeById(sid);
-    if(!store)return;
-    const done=items.filter(i=>i.bought).length;
-    tmplHtml+=`<div style="margin-bottom:16px;">
-      <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:${store.color}10;border-radius:11px;margin-bottom:8px;border-left:3px solid ${store.color};">
-        <span style="font-size:18px;">${store.emoji}</span>
-        <span style="font-size:12px;font-weight:700;color:${store.color};">${store.name}</span>
-        <span style="font-size:11px;color:#9CA3AF;margin-left:auto;">${done}/${items.length}</span>
-      </div>
-      ${items.sort((a,b)=>a.name.localeCompare(b.name)).map(renderTmplItem).join("")}
-    </div>`;
-  });
-  if(noStore.length){
-    tmplHtml+=`<div style="margin-bottom:16px;">
-      <div style="font-size:10px;font-weight:700;color:#9CA3AF;letter-spacing:.8px;text-transform:uppercase;margin-bottom:7px;padding-left:2px;">🛒 Kein Supermarkt</div>
-      ${noStore.sort((a,b)=>a.name.localeCompare(b.name)).map(renderTmplItem).join("")}
-    </div>`;
+  if(tmpl.length===0){
+    tmplHtml+=`<div style="text-align:center;color:#9CA3AF;padding:44px 0;"><div style="font-size:40px;">📌</div><div style="margin-top:8px;font-weight:500;">Noch keine Artikel</div><div style="font-size:12px;margin-top:4px;">In der Liste auf 📌 tippen</div></div>`;
+  } else if(shoppingSort==="cat"||shoppingSort==="store"){
+    const groupFn=shoppingSort==="cat"
+      ?(item=>item.cat||"❓ Sonstiges")
+      :(item=>{const s=storeById(item.storeId);return s?s.id+"|"+s.emoji+" "+s.name:"zzz|🛒 Kein Supermarkt";});
+    const groups={};
+    sortedTmpl.forEach(item=>{const k=groupFn(item);if(!groups[k])groups[k]=[];groups[k].push(item);});
+    Object.keys(groups).sort().forEach(grpKey=>{
+      const grpName=shoppingSort==="store"?grpKey.split("|")[1]:grpKey;
+      const storeId=shoppingSort==="store"?grpKey.split("|")[0]:null;
+      const store=storeId?storeById(storeId):null;
+      tmplHtml+=`<div style="margin-bottom:14px;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:7px;padding:7px 11px;border-radius:9px;${store?"background:"+store.color+"12;color:"+store.color+";border-left:3px solid "+store.color:"background:#F3F4F6;color:#9CA3AF;"}">${grpName}</div>
+        ${groups[grpKey].map(renderTmplItem).join("")}
+      </div>`;
+    });
+  } else {
+    tmplHtml+=sortedTmpl.map(renderTmplItem).join("");
   }
-  document.getElementById("tab-template").innerHTML=_searchBar("template","🔍 Einkaufsliste suchen...")+tmplHtml;
+  document.getElementById("tab-template").innerHTML=_searchBar("template","🔍 Einkaufsliste suchen...")+tmplSortBar+tmplHtml;
 
   // ── DEALS ──
   const maximarktUploadSection=`
