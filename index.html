@@ -276,7 +276,7 @@ const FB_CFG={
 };
 
 let db=null, currentUser=null, currentTab="list", addTarget="list", listSort="default", shoppingSort="default";
-let state={items:{},template:{},deals:{},notifications:{},activeMarkets:null};
+let state={items:{},template:{},deals:{},notifications:{},activeMarkets:null,favorites:{}};
 let activeMarkets=null; // null = loading, array = loaded from /settings/activeMarkets
 let storePickerCallback=null;
 let dealRefreshTimer=null;
@@ -293,6 +293,7 @@ function initApp(){
     ["items","template","deals","notifications"].forEach(k=>{
       db.ref(k).on("value",snap=>{state[k]=snap.val()||{};render();});
     });
+    db.ref("favorites").on("value",snap=>{state.favorites=snap.val()||{};render();});
     db.ref("settings/activeMarkets").on("value",snap=>{
       const val=snap.val();
       activeMarkets=Array.isArray(val)?val:["hofer","lidl","eurospar","maximarkt"];
@@ -434,7 +435,25 @@ function toggleItem(k){
   db.ref("items/"+k).update({done});
   if(done) pushNotif(USERS[currentUser].name+' hat „'+item.name+'" erledigt ✅');
 }
-function deleteItem(k){db.ref("items/"+k).remove();}
+function deleteItem(k){
+  db.ref("items/"+k).remove();
+  db.ref("favorites/du/"+k).remove();
+  db.ref("favorites/frau/"+k).remove();
+}
+function toggleFavorite(k){
+  const userFavs=state.favorites[currentUser]||{};
+  if(userFavs[k]){
+    db.ref("favorites/"+currentUser+"/"+k).remove();
+  } else {
+    if(Object.keys(userFavs).length>=8){showToast("Maximal 8 Favoriten — entferne zuerst einen anderen");return;}
+    db.ref("favorites/"+currentUser+"/"+k).set(true);
+  }
+}
+function showToast(msg){
+  const t=document.getElementById("toast");
+  t.textContent=msg;t.style.opacity="1";
+  clearTimeout(t._to);t._to=setTimeout(()=>{t.style.opacity="0";},3000);
+}
 function toggleTemplate(k){const i=state.template[k];if(!i)return;db.ref("template/"+k).update({bought:!i.bought});}
 function deleteTemplate(k){db.ref("template/"+k).remove();}
 function clearDone(){Object.entries(state.items).forEach(([k,v])=>{if(v.done)db.ref("items/"+k).remove();});}
@@ -747,9 +766,11 @@ function render(){
   if(_lf_list)sortedItems=sortedItems.filter(item=>`${item.name||""} ${item.note||""} ${item.cat||""}`.toLowerCase().includes(_lf_list));
   const doneCount=items.filter(i=>i.done).length;
 
+  const userFavs=state.favorites[currentUser]||{};
   const renderListItem=(item,i)=>{
     const store=storeById(item.storeId);
     const inTmpl=tmpl.some(t=>t.name.toLowerCase()===item.name.toLowerCase());
+    const isFav=!!userFavs[item.fbKey];
     const matched=findDeals(item.name,deals);
     const deal=matched.length?matched.slice().sort((a,b)=>parsePrice(a.price)-parsePrice(b.price))[0]:null;
     const extra=matched.length>1?matched.length-1:0;
@@ -775,7 +796,10 @@ function render(){
           ${item.note?`<div style="font-size:11px;color:#94a3b8;margin-top:3px;font-style:italic;">💬 ${esc(item.note)}</div>`:""}
         </div>
         <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;flex-shrink:0;">
-          <button onclick="deleteItem('${item.fbKey}')" class="tap" style="background:none;border:none;color:#D1D5DB;font-size:17px;padding:0;line-height:1;cursor:pointer;">×</button>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button onclick="toggleFavorite('${item.fbKey}')" class="tap" style="background:none;border:none;font-size:15px;padding:0;line-height:1;cursor:pointer;color:${isFav?"#F59E0B":"#D1D5DB"};">${isFav?"⭐":"☆"}</button>
+            <button onclick="deleteItem('${item.fbKey}')" class="tap" style="background:none;border:none;color:#D1D5DB;font-size:17px;padding:0;line-height:1;cursor:pointer;">×</button>
+          </div>
           ${!item.done?`<button onclick="addItemToTemplate('${item.fbKey}')" class="tap" style="padding:4px 8px;border:none;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;background:${inTmpl?"#F3F4F6":"#EDE9FE"};color:${inTmpl?"#9CA3AF":"#6D28D9"};">${inTmpl?"📌 ✓":"📌 merken"}</button>`:""}
         </div>
       </div>
@@ -812,7 +836,12 @@ function render(){
     else listHtml=sortedItems.map((item,i)=>renderListItem(item,i)).join("");
   }
 
-  document.getElementById("tab-list").innerHTML=_searchBar("list","🔍 Artikel suchen...")+sortBar+listHtml;
+  const favItems=items.filter(i=>userFavs[i.fbKey]).sort((a,b)=>a.name.localeCompare(b.name,"de"));
+  const favHtml=favItems.length>0?`<div style="margin-bottom:14px;">
+    <div style="font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:7px;padding:7px 11px;border-radius:9px;background:#FEF9C3;color:#B45309;border-left:3px solid #F59E0B;">⭐ Favoriten</div>
+    ${favItems.map((item,i)=>renderListItem(item,i)).join("")}
+  </div>`:"";
+  document.getElementById("tab-list").innerHTML=_searchBar("list","🔍 Artikel suchen...")+sortBar+favHtml+listHtml;
 
 // ── TEMPLATE ──
   const tmplBought=tmpl.filter(i=>i.bought).length;
@@ -1069,5 +1098,6 @@ async function uploadMaximarktFlugblatt(input){
 
 window.addEventListener("load",initApp);
 </script>
+<div id="toast" style="position:fixed;bottom:88px;left:50%;transform:translateX(-50%);background:#1C2B1A;color:white;padding:10px 18px;border-radius:12px;font-size:13px;font-weight:600;opacity:0;transition:opacity .3s;z-index:9999;pointer-events:none;white-space:nowrap;"></div>
 </body>
 </html>
