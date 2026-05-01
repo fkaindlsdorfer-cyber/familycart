@@ -48,6 +48,21 @@ function normalizeStore(name) {
   return n;
 }
 
+// ── Wort-Boundary-Validierung ─────────────────────────────────────────────────
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function matchesArticleName(articleName, fullText) {
+  const tokens = (articleName || "").toLowerCase()
+    .replace(/[^\wäöüß\s-]/g, " ")
+    .split(/[\s-]+/)
+    .filter(t => t.length >= 4);
+  if (!tokens.length) return false;
+  const hay = (fullText || "").toLowerCase();
+  return tokens.some(t => new RegExp(`\\b${escapeRegex(t)}\\b`, 'u').test(hay));
+}
+
 // ── Marktguru API-Key extraction ──────────────────────────────────────────────
 async function getMarktguruKeys() {
   const res = await fetch("https://marktguru.at", {
@@ -206,10 +221,13 @@ WICHTIGE REGELN:
    Beispiel: "STATT 14,99 / AB 2 FL. JE 11,99" → price:"11,99 EUR", oldPrice:"14,99 EUR", savings:"ab 2 Flaschen"
 3. "STATT X / NUR Y": price:Y, oldPrice:X.
 4. KRITISCH: Wenn price === oldPrice und keine echte Reduktion erkennbar → diesen Eintrag NICHT zurückgeben.
-5. articleName: vollständiger Produktname inkl. Marke und Variante (z.B. "Monini Olivenöl Classico", nicht "Olivenöl").
+5. productName: vollständiger Produktname inkl. Marke und Variante (z.B. "Monini Olivenöl Classico 750 ml", nicht "Olivenöl").
+6. boundingBox: [ymin, xmin, ymax, xmax] mit normalisierten Koordinaten 0–1000.
+   Die Box muss den kompletten Aktions-Bereich umschließen: Produktbild + Preis-Block + Aktions-Hinweis.
+   Format ist EXAKT so: [ymin, xmin, ymax, xmax] (Reihenfolge beachten!).
 
 Antworte NUR mit JSON – keine weiteren Texte:
-{"deals":[{"articleName":"Vollständiger Produktname","price":"1,99 EUR","savings":"-20%","oldPrice":"2,49 EUR"}]}
+{"deals":[{"productName":"Vollständiger Produktname inkl. Marke und Variante","price":"1,99 EUR","savings":"-20%","oldPrice":"2,49 EUR","boundingBox":[100,50,400,950]}]}
 Keine Treffer: {"deals":[]}`;
 
       const data = await callGeminiWithRetry(base64, prompt);
@@ -236,16 +254,34 @@ Keine Treffer: {"deals":[]}`;
       const jsonM = rawText.match(/\{[\s\S]*\}/);
 
       if (jsonM) {
-        const found = (JSON.parse(jsonM[0]).deals || []).filter(d => d.articleName);
+        const found = (JSON.parse(jsonM[0]).deals || []).filter(d => d.productName || d.articleName);
         if (found.length > 0) {
-          console.log(`${found.length} Treffer`);
+          let hitCount = 0;
           found.forEach(d => {
-            console.log(`      ✅ ${d.articleName} – ${d.price || "?"}`);
+            const productName = d.productName || d.articleName;
+            if (!productName) return;
+
+            const matchedArticle = articles.find(a => matchesArticleName(a.name, productName));
+            if (!matchedArticle) {
+              console.log(`      ⏭️  "${productName}" konnte keinem Listen-Artikel zugeordnet werden`);
+              return;
+            }
+
+            let boundingBox = null;
+            if (Array.isArray(d.boundingBox) && d.boundingBox.length === 4
+                && d.boundingBox.every(n => typeof n === "number" && n >= 0 && n <= 1000)) {
+              const [ymin, xmin, ymax, xmax] = d.boundingBox;
+              if (ymin < ymax && xmin < xmax) boundingBox = d.boundingBox;
+            }
+
+            console.log(`      ✅ ${productName} → "${matchedArticle.name}" – ${d.price || "?"}`);
+            hitCount++;
             deals.push({
-              articleName:  d.articleName,
+              articleName:  matchedArticle.name,
+              productName,
               storeId:      "maximarkt",
               storeName:    "Maximarkt",
-              title:        d.articleName,
+              title:        productName,
               price:        d.price    || null,
               oldPrice:     d.oldPrice || null,
               savings:      d.savings  || null,
@@ -254,9 +290,11 @@ Keine Treffer: {"deals":[]}`;
               leafletId:    leaflet.id,
               leafletTitle: leaflet.name,
               pageIndex:    page,
+              boundingBox,
               checkedAt,
             });
           });
+          if (!hitCount) console.log("–");
         } else {
           console.log("–");
         }
@@ -344,20 +382,34 @@ async function main() {
       } else {
         console.log(`   ✅ ${results.length} Angebot(e):`);
         for (const offer of results) {
-          const storeName  = offer.advertisers?.[0]?.name || "Unbekannt";
-          const storeId    = normalizeStore(storeName);
+          const storeName = offer.advertisers?.[0]?.name || "Unbekannt";
+          const storeId   = normalizeStore(storeName);
           if (!activeMarkets.includes(storeId)) continue;
+
+          const productName = [offer.brand?.name, offer.product?.name]
+            .filter(Boolean).join(" ").trim() || article.name;
+
+          if (!matchesArticleName(article.name, productName)) {
+            console.log(`      ⏭️  verworfen (kein Wort-Boundary-Match): "${productName}"`);
+            continue;
+          }
+
           const price      = offer.price    ? `${offer.price} EUR`    : null;
           const oldPrice   = offer.oldPrice ? `${offer.oldPrice} EUR` : null;
           const savings    = (offer.price && offer.oldPrice)
             ? `-${(offer.oldPrice - offer.price).toFixed(2)} EUR` : null;
           const validUntil = offer.validityDates?.[0]?.to?.slice(0, 10) || null;
-          console.log(`      🏪 ${storeName}: ${offer.description || article.name} – ${price || "?"}`);
+          const imageUrl   = offer.images?.urls?.large || null;
+          const offerUrl   = offer.externalUrl || null;
+
+          console.log(`      🏪 ${storeName}: ${productName} – ${price || "?"}`);
           allDeals.push({
             articleName: article.name,
+            productName,
             storeId, storeName,
             title:      offer.description || article.name,
             price, oldPrice, savings, validUntil,
+            imageUrl, offerUrl,
             source:     "marktguru.at",
             checkedAt,
           });
