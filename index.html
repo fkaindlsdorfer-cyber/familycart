@@ -594,22 +594,16 @@ function renderDealCards(itemName,allDeals){
   return[...matched].sort((a,b)=>parsePrice(a.price)-parsePrice(b.price)).map(d=>{
     const store=storeById(d.storeId);
     const sc=store?store.color:"#374151";
-    const isLeaflet=(d.source||"").toLowerCase().includes("leaflet");
-    const linkHtml=isLeaflet
-      ?`<a href="https://www.marktguru.at/search/${encodeURIComponent(d.articleName||"")}" target="_blank" rel="noopener" style="font-size:11px;color:#6B7280;">🔍 auf marktguru suchen</a>`
-      :(d.url&&d.url.startsWith("http"))?`<a href="${esc(d.url)}" target="_blank" rel="noopener" style="font-size:11px;color:#6D28D9;font-weight:600;">→ auf marktguru ansehen</a>`
-      :"";
     const savingsHtml=d.savings?`<span style="font-size:11px;padding:2px 7px;border-radius:6px;background:#DCFCE7;color:#166534;font-weight:700;">${esc(d.savings)}</span>`:"";
     const oldPriceHtml=(d.oldPrice&&d.oldPrice!==d.price)?`<span style="font-size:12px;text-decoration:line-through;color:#9CA3AF;">${esc(d.oldPrice)}</span>`:"";
     const validHtml=d.validUntil?`<span style="font-size:11px;color:#9CA3AF;">⏳ bis ${esc(d.validUntil.split("T")[0])}</span>`:"";
-    return`<div style="background:#F9FAFB;border-radius:12px;padding:12px 13px;border:1px solid #E5E7EB;margin-bottom:8px;">
+    return`<div onclick="openDealDetail('${esc(d.fbKey)}')" style="background:#F9FAFB;border-radius:12px;padding:12px 13px;border:1px solid #E5E7EB;margin-bottom:8px;cursor:pointer;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
         <span style="font-size:11px;padding:2px 9px;border-radius:8px;background:${sc}18;color:${sc};font-weight:700;">${store?store.emoji+" ":""}${esc(d.storeName||(d.storeId||"").toUpperCase()||"?")}</span>
         <span style="font-size:18px;font-weight:700;color:#111827;">${esc(d.price||"?")}</span>
       </div>
-      <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:5px;">${esc(d.title||d.articleName||"")}</div>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;${linkHtml?"margin-bottom:5px;":""}">${oldPriceHtml}${savingsHtml}${validHtml}</div>
-      ${linkHtml}
+      <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:5px;">${esc(d.productName||d.title||d.articleName||"")}</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">${oldPriceHtml}${savingsHtml}${validHtml}</div>
     </div>`;
   }).join("");
 }
@@ -649,6 +643,82 @@ function openDealModal(itemName){
     <button onclick="document.getElementById('dealDetailModal').style.display='none'" class="btn-light tap" style="margin-top:12px;">Schließen</button>
   </div>`;
   modal.style.display="flex";
+}
+
+function openDealDetail(fbKey){
+  const d=state.deals?.[fbKey];
+  if(!d)return;
+  let modal=document.getElementById("dealDetailFullModal");
+  if(!modal){
+    modal=document.createElement("div");
+    modal.id="dealDetailFullModal";
+    modal.className="modal-bg";
+    modal.onclick=e=>{if(e.target===modal)modal.style.display="none";};
+    document.body.appendChild(modal);
+  }
+  const store=storeById(d.storeId);
+  const sc=store?store.color:"#374151";
+  const imgHtml=renderDealImage(d,fbKey);
+  const subtitleHtml=(d.title&&d.title!==(d.productName||d.title))
+    ?`<div style="font-size:12px;color:#6B7280;margin-bottom:10px;">${esc(d.title)}</div>`:"";
+  const linkHtml=d.offerUrl
+    ?`<a href="${esc(d.offerUrl)}" target="_blank" rel="noopener" style="display:block;text-align:center;font-size:13px;color:#6D28D9;font-weight:600;padding:10px;background:#F9FAFB;border-radius:10px;text-decoration:none;">→ Auf marktguru ansehen</a>`
+    :`<a href="https://www.marktguru.at/search/${encodeURIComponent(d.productName||d.articleName||"")}" target="_blank" rel="noopener" style="display:block;text-align:center;font-size:13px;color:#6B7280;padding:10px;background:#F9FAFB;border-radius:10px;text-decoration:none;">🔍 Auf marktguru suchen</a>`;
+  modal.innerHTML=`<div class="modal-box">
+    <div class="modal-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:12px;padding:3px 10px;border-radius:8px;background:${sc}18;color:${sc};font-weight:700;">${store?store.emoji+" ":""}${esc(d.storeName||"")}</span>
+      <button onclick="document.getElementById('dealDetailFullModal').style.display='none'" style="background:none;border:none;font-size:20px;color:#9CA3AF;cursor:pointer;padding:0;line-height:1;">✕</button>
+    </div>
+    ${imgHtml}
+    <div style="font-size:15px;font-weight:600;color:#111827;margin:14px 0 4px;line-height:1.35;">${esc(d.productName||d.title||d.articleName||"")}</div>
+    ${subtitleHtml}
+    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
+      <span style="font-size:24px;font-weight:700;color:#111827;">${esc(d.price||"?")}</span>
+      ${(d.oldPrice&&d.oldPrice!==d.price)?`<span style="font-size:14px;text-decoration:line-through;color:#9CA3AF;">${esc(d.oldPrice)}</span>`:""}
+      ${d.savings?`<span style="font-size:12px;padding:3px 9px;border-radius:6px;background:#DCFCE7;color:#166534;font-weight:700;">${esc(d.savings)}</span>`:""}
+    </div>
+    ${d.validUntil?`<div style="font-size:12px;color:#6B7280;margin-bottom:14px;">⏳ Gültig bis ${esc(d.validUntil.split("T")[0])}</div>`:""}
+    ${linkHtml}
+  </div>`;
+  modal.style.display="flex";
+}
+
+function renderDealImage(d,fbKey){
+  if(d.imageUrl){
+    return`<img src="${esc(d.imageUrl)}" style="width:100%;max-height:300px;object-fit:contain;background:#F9FAFB;border-radius:10px;display:block;" onerror="this.outerHTML='<div style=&quot;padding:30px;text-align:center;background:#F9FAFB;border-radius:10px;color:#9CA3AF;font-size:13px;&quot;>Bild nicht ladbar</div>'"/>`;
+  }
+  if(d.leafletId!==undefined&&d.pageIndex!==undefined){
+    const fullUrl=`https://mgat.b-cdn.net/api/v1/leaflets/${d.leafletId}/images/pages/${d.pageIndex}/xlarge.webp`;
+    if(d.boundingBox&&Array.isArray(d.boundingBox)&&d.boundingBox.length===4){
+      const canvasId=`dealCrop_${fbKey}`;
+      setTimeout(()=>cropImageToCanvas(fullUrl,d.boundingBox,canvasId),0);
+      return`<canvas id="${canvasId}" style="width:100%;max-height:400px;background:#F9FAFB;border-radius:10px;display:block;"></canvas>`;
+    }
+    return`<img src="${fullUrl}" style="width:100%;max-height:400px;object-fit:contain;background:#F9FAFB;border-radius:10px;display:block;"/>`;
+  }
+  return`<div style="padding:40px;text-align:center;background:#F9FAFB;border-radius:10px;color:#9CA3AF;font-size:13px;">Kein Snapshot verfügbar</div>`;
+}
+
+function cropImageToCanvas(imageUrl,bbox,canvasId,paddingNorm=0.03){
+  const img=new Image();
+  img.onload=()=>{
+    const canvas=document.getElementById(canvasId);
+    if(!canvas)return;
+    const[ymin,xmin,ymax,xmax]=bbox;
+    const pad=paddingNorm*1000;
+    const yMinP=Math.max(0,ymin-pad),xMinP=Math.max(0,xmin-pad);
+    const yMaxP=Math.min(1000,ymax+pad),xMaxP=Math.min(1000,xmax+pad);
+    const sx=(xMinP/1000)*img.naturalWidth,  sy=(yMinP/1000)*img.naturalHeight;
+    const sw=((xMaxP-xMinP)/1000)*img.naturalWidth, sh=((yMaxP-yMinP)/1000)*img.naturalHeight;
+    canvas.width=sw;canvas.height=sh;
+    canvas.getContext("2d").drawImage(img,sx,sy,sw,sh,0,0,sw,sh);
+  };
+  img.onerror=()=>{
+    const c=document.getElementById(canvasId);
+    if(c)c.outerHTML=`<img src="${imageUrl}" style="width:100%;max-height:400px;object-fit:contain;background:#F9FAFB;border-radius:10px;"/>`;
+  };
+  img.src=imageUrl;
 }
 
 /* ── Gemini web-search (deactivated – kept for reference) ──────────────────
