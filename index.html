@@ -920,14 +920,21 @@ function render(){
   let sortedTmpl=[...filtTmpl];
   sortItems(sortedTmpl, shoppingSort);
   const renderTmplItem=item=>{
+    const matched=findDeals(item.name,deals);
+    const deal=matched.length?matched.slice().sort((a,b)=>parsePrice(a.price)-parsePrice(b.price))[0]:null;
+    const extra=matched.length>1?matched.length-1:0;
+    const dealTag=deal?`<button onclick="event.stopPropagation();openDealModal('${item.name.replace(/'/g,"\\'")}')" class="deal-badge tap" style="border:none;cursor:pointer;">🏷️ ${esc(deal.savings||deal.price||"Aktion")}${extra?` (+${extra})`:""}</button>`:"";
     return `<div style="background:${item.bought?"#F5F5F0":"white"};border-radius:13px;padding:11px 13px;box-shadow:${item.bought?"none":"0 2px 8px rgba(0,0,0,0.06)"};opacity:${item.bought?.6:1};margin-bottom:6px;display:flex;align-items:center;gap:10px;transition:opacity .2s;">
       <button onclick="toggleTemplate('${item.fbKey}')" class="tap" style="width:26px;height:26px;border-radius:8px;flex-shrink:0;border:none;background:${item.bought?"#6D28D9":"white"};box-shadow:${item.bought?"none":"inset 0 0 0 2px #D1D5DB"};display:flex;align-items:center;justify-content:center;cursor:pointer;">
         ${item.bought?"<span style='color:white;font-size:12px;font-weight:700;'>✓</span>":""}
       </button>
       <div style="flex:1;min-width:0;cursor:pointer;" onclick="openEditModal('${item.fbKey}','template')">
-        <div style="font-weight:600;font-size:14px;color:${item.bought?"#9CA3AF":"#111827"};text-decoration:${item.bought?"line-through":"none"};">${esc(item.name)}</div>
-        ${item.qty?`<span style="font-size:11px;color:#9CA3AF;">${esc(item.qty)}${esc(item.unit||"")}</span>`:""}
-        ${item.note?`<div style="font-size:11px;color:#94a3b8;font-style:italic;">💬 ${esc(item.note)}</div>`:""}
+        <div style="display:flex;gap:5px;align-items:baseline;flex-wrap:wrap;">
+          <span style="font-weight:600;font-size:14px;color:${item.bought?"#9CA3AF":"#111827"};text-decoration:${item.bought?"line-through":"none"};">${esc(item.name)}</span>
+          ${item.qty?`<span style="font-size:11px;color:#9CA3AF;">${esc(item.qty)}${esc(item.unit||"")}</span>`:""}
+          ${dealTag}
+        </div>
+        ${item.note?`<div style="font-size:11px;color:#94a3b8;font-style:italic;margin-top:3px;">💬 ${esc(item.note)}</div>`:""}
       </div>
       <button onclick="deleteTemplate('${item.fbKey}')" class="tap" style="background:none;border:none;color:#D1D5DB;font-size:16px;padding:0;cursor:pointer;">×</button>
     </div>`;
