@@ -955,7 +955,7 @@ function render(){
   document.getElementById("tab-list").innerHTML=_listSearchBar()+sortBar+
     `<div id="list-search-section" hidden style="margin-bottom:14px;">${searchHdr}<div id="list-search-items"></div></div>`+
     `<div id="list-fav-section" style="margin-bottom:14px;">${favInner}</div>`+
-    `<div id="list-items-section">${listHtml}</div>`;
+    `<div id="list-items-section" style="margin-top:24px;"><div style="font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:7px;padding:7px 11px;border-radius:9px;background:#F3F4F6;color:#374151;border-left:3px solid #6B7280;">🛒 Artikelliste</div>${listHtml}</div>`;
   applyListFilter(_listQuery);
 
 // ── TEMPLATE ──
