@@ -277,7 +277,7 @@ const FB_CFG={
 
 let db=null, currentUser=null, currentTab="list", addTarget="list", listSort="default", shoppingSort="default";
 let state={items:{},template:{},deals:{},notifications:{},activeMarkets:null,favorites:{}};
-let _listQuery="",_listSearchTimer=null,_renderListItem=null,_tmplQuery="",_tmplSearchTimer=null;
+let _listQuery="",_listSearchTimer=null,_renderListItem=null,_tmplQuery="",_tmplSearchTimer=null,_dealsQuery="",_dealsSearchTimer=null;
 let activeMarkets=null; // null = loading, array = loaded from /settings/activeMarkets
 let storePickerCallback=null;
 let dealRefreshTimer=null;
@@ -445,6 +445,23 @@ function applyListFilter(q){
       :(_renderListItem?hits.map((it,i)=>_renderListItem(it,i)).join(""):"");
   }
 }
+function dealsSearchInput(val){_dealsQuery=val;_lf.deals=val.toLowerCase().trim();clearTimeout(_dealsSearchTimer);if(!val.trim()){applyDealsFilter("");}else{_dealsSearchTimer=setTimeout(()=>applyDealsFilter(_dealsQuery),150);}}
+function applyDealsFilter(q){
+  const c=document.getElementById("deals-items-container");
+  if(!c)return;
+  const inp=document.getElementById("search-deals");
+  const clr=document.getElementById("deals-search-clear");
+  const qn=normalize(q.trim());
+  if(clr)clr.style.display=qn?"":"none";
+  if(inp){inp.style.paddingRight=qn?"32px":"12px";if(!qn)inp.value="";}
+  c.querySelectorAll("[data-deal-id]").forEach(el=>{
+    el.hidden=!!qn&&!normalize(el.dataset.dealName||"").includes(qn)&&!normalize(el.dataset.dealStore||"").includes(qn)&&!normalize(el.dataset.dealTitle||"").includes(qn);
+  });
+  const fe=document.getElementById("deals-filter-empty");
+  const hasDealItems=!!c.querySelector("[data-deal-id]");
+  if(fe)fe.hidden=!qn||!hasDealItems||!!c.querySelector("[data-deal-id]:not([hidden])");
+}
+function _dealsSearchBar(){const v=_lf.deals;return`<div style="position:relative;margin-bottom:10px;"><input id="search-deals" type="text" value="${esc(v)}" oninput="dealsSearchInput(this.value)" placeholder="🔍 Aktion suchen..." style="width:100%;padding:8px ${v?"32px":"12px"} 8px 12px;border:1.5px solid #E5E7EB;border-radius:10px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;background:#FAFAFA;"><button id="deals-search-clear" onclick="dealsSearchInput('')" style="display:${v?"":"none"};position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9CA3AF;font-size:18px;line-height:1;cursor:pointer;padding:0;">×</button></div>`;}
 function tmplSearchInput(val){_tmplQuery=val;_lf.template=val.toLowerCase().trim();clearTimeout(_tmplSearchTimer);if(!val.trim()){applyTmplFilter("");}else{_tmplSearchTimer=setTimeout(()=>applyTmplFilter(_tmplQuery),150);}}
 function applyTmplFilter(q){
   const c=document.getElementById("tmpl-items-container");
@@ -1060,16 +1077,14 @@ function render(){
       <div id="maximarktStatus" style="margin-top:8px;"></div>
     </div>`;
 
-  const _lf_deals=_lf.deals;
-  const filtDeals=_lf_deals?deals.filter(d=>`${d.articleName||""} ${d.title||""} ${d.storeName||""}`.toLowerCase().includes(_lf_deals)):deals;
   const dealsHtml = activeMarkets===null
     ? [80,60,72,50,65].map(w=>`<div style="background:white;border-radius:15px;padding:14px;margin-bottom:8px;"><div style="height:14px;width:${w}%;background:#F3F4F6;border-radius:6px;animation:pulse 1.2s ease-in-out infinite;"></div><div style="height:10px;width:40%;background:#F3F4F6;border-radius:6px;margin-top:10px;animation:pulse 1.2s ease-in-out infinite;"></div></div>`).join("")
-    : filtDeals.length === 0
+    : deals.length === 0
     ? `<div style="text-align:center;color:#9CA3AF;padding:44px 0;"><div style="font-size:40px;">🏷️</div><p style="margin-top:8px;">Keine aktuellen Aktionen</p><p style="font-size:12px;margin-top:4px;">Das Skript sucht täglich nachts automatisch</p><a href="https://www.marktguru.at/angebote" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;margin-top:16px;padding:11px 20px;background:#1C2B1A;color:white;text-decoration:none;border-radius:12px;font-size:13px;font-weight:700;">🌐 Auf marktguru.at suchen →</a></div>`
-    : filtDeals.map(d=>{
+    : deals.map(d=>{
       const store=storeById(d.storeId);
       const link=d.url||mgUrl(d.articleName||"");
-      return `<div style="background:white;border-radius:15px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,0.06);margin-bottom:8px;">
+      return `<div data-deal-id="${d.fbKey}" data-deal-name="${esc(d.articleName||"")}" data-deal-store="${esc(d.storeName||"")}" data-deal-title="${esc(d.title||"")}" style="background:white;border-radius:15px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,0.06);margin-bottom:8px;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
           <div style="flex:1;">
             <div style="font-weight:700;font-size:15px;color:#111827;margin-bottom:7px;">${esc(d.articleName||"")}</div>
@@ -1086,7 +1101,9 @@ function render(){
       </div>`;
     }).join("");
 
-  document.getElementById("tab-deals").innerHTML=maximarktUploadSection+_searchBar("deals","🔍 Aktion suchen...")+dealsHtml;
+  const dealsFilterEmpty=`<div id="deals-filter-empty" hidden style="text-align:center;color:#9CA3AF;padding:20px 0;font-size:14px;">Keine Aktionen gefunden</div>`;
+  document.getElementById("tab-deals").innerHTML=maximarktUploadSection+_dealsSearchBar()+`<div id="deals-items-container">${dealsHtml}${dealsFilterEmpty}</div>`;
+  applyDealsFilter(_dealsQuery);
 
   // ── NOTIFS (fixed: filter by to===currentUser) ──
   document.getElementById("tab-notifs").innerHTML=notifs.length===0
