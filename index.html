@@ -410,6 +410,9 @@ function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").
 function storeById(id){return STORES.find(s=>s.id===id)||null;}
 function closeModal(id){document.getElementById(id).style.display="none";}
 function filterTab(key,val){_lf[key]=val.toLowerCase().trim();render();}
+function normalize(s){return(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();}
+function _rankItem(name,q){const n=normalize(name);if(n===q)return 0;if(n.startsWith(q))return 1;if(n.includes(q))return 2;return-1;}
+function getSearchHits(items,query){const q=normalize(query.trim());if(!q)return[];return items.map(it=>({it,r:_rankItem(it.name,q)})).filter(x=>x.r>=0).sort((a,b)=>a.r-b.r||a.it.name.localeCompare(b.it.name,"de")).map(x=>x.it);}
 function _searchBar(key,ph){const v=_lf[key];return`<div style="position:relative;margin-bottom:10px;"><input id="search-${key}" type="text" value="${esc(v)}" oninput="filterTab('${key}',this.value)" placeholder="${ph}" style="width:100%;padding:8px ${v?"32px":"12px"} 8px 12px;border:1.5px solid #E5E7EB;border-radius:10px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;background:#FAFAFA;">${v?`<button onclick="filterTab('${key}','')" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9CA3AF;font-size:18px;line-height:1;cursor:pointer;padding:0;">×</button>`:""}</div>`;}
 const GEMINI_WORKER_URL="https://familycart-gemini-proxy.fkaindls.workers.dev";
 
@@ -833,7 +836,7 @@ function render(){
   sortItems(sortedItems, listSort);
 
   const _lf_list=_lf.list;
-  if(_lf_list)sortedItems=sortedItems.filter(item=>`${item.name||""} ${item.note||""} ${item.cat||""}`.toLowerCase().includes(_lf_list));
+  if(_lf_list)sortedItems=getSearchHits(items,_lf_list);
   const doneCount=items.filter(i=>i.done).length;
 
   const userFavs=state.favorites[currentUser]||{};
