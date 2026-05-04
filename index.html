@@ -277,7 +277,7 @@ const FB_CFG={
 
 let db=null, currentUser=null, currentTab="list", addTarget="list", listSort="default", shoppingSort="default";
 let state={items:{},template:{},deals:{},notifications:{},activeMarkets:null,favorites:{}};
-let _listQuery="",_listSearchTimer=null,_renderListItem=null;
+let _listQuery="",_listSearchTimer=null,_renderListItem=null,_tmplQuery="",_tmplSearchTimer=null;
 let activeMarkets=null; // null = loading, array = loaded from /settings/activeMarkets
 let storePickerCallback=null;
 let dealRefreshTimer=null;
@@ -445,6 +445,25 @@ function applyListFilter(q){
       :(_renderListItem?hits.map((it,i)=>_renderListItem(it,i)).join(""):"");
   }
 }
+function tmplSearchInput(val){_tmplQuery=val;_lf.template=val.toLowerCase().trim();clearTimeout(_tmplSearchTimer);if(!val.trim()){applyTmplFilter("");}else{_tmplSearchTimer=setTimeout(()=>applyTmplFilter(_tmplQuery),150);}}
+function applyTmplFilter(q){
+  const c=document.getElementById("tmpl-items-container");
+  if(!c)return;
+  const inp=document.getElementById("search-template");
+  const clr=document.getElementById("tmpl-search-clear");
+  const qn=normalize(q.trim());
+  if(clr)clr.style.display=qn?"":"none";
+  if(inp){inp.style.paddingRight=qn?"32px":"12px";if(!qn)inp.value="";}
+  c.querySelectorAll("[data-tmpl-id]").forEach(el=>{
+    el.hidden=!!qn&&!normalize(el.dataset.tmplName||"").includes(qn)&&!normalize(el.dataset.tmplNote||"").includes(qn);
+  });
+  c.querySelectorAll("[data-tmpl-group]").forEach(g=>{
+    g.hidden=!!qn&&!g.querySelector("[data-tmpl-id]:not([hidden])");
+  });
+  const fe=document.getElementById("tmpl-filter-empty");
+  if(fe)fe.hidden=!qn||!!c.querySelector("[data-tmpl-id]:not([hidden])");
+}
+function _tmplSearchBar(){const v=_lf.template;return`<div style="position:relative;margin-bottom:10px;"><input id="search-template" type="text" value="${esc(v)}" oninput="tmplSearchInput(this.value)" placeholder="🔍 Einkaufsliste suchen..." style="width:100%;padding:8px ${v?"32px":"12px"} 8px 12px;border:1.5px solid #E5E7EB;border-radius:10px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;background:#FAFAFA;"><button id="tmpl-search-clear" onclick="tmplSearchInput('')" style="display:${v?"":"none"};position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9CA3AF;font-size:18px;line-height:1;cursor:pointer;padding:0;">×</button></div>`;}
 function _listSearchBar(){const v=_lf.list;return`<div style="position:relative;margin-bottom:10px;"><input id="search-list" type="text" value="${esc(v)}" oninput="listSearchInput(this.value)" placeholder="🔍 Artikel suchen..." style="width:100%;padding:8px ${v?"32px":"12px"} 8px 12px;border:1.5px solid #E5E7EB;border-radius:10px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;background:#FAFAFA;"><button id="list-search-clear" onclick="listSearchInput('')" style="display:${v?"":"none"};position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9CA3AF;font-size:18px;line-height:1;cursor:pointer;padding:0;">×</button></div>`;}
 function _searchBar(key,ph){const v=_lf[key];return`<div style="position:relative;margin-bottom:10px;"><input id="search-${key}" type="text" value="${esc(v)}" oninput="filterTab('${key}',this.value)" placeholder="${ph}" style="width:100%;padding:8px ${v?"32px":"12px"} 8px 12px;border:1.5px solid #E5E7EB;border-radius:10px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;background:#FAFAFA;">${v?`<button onclick="filterTab('${key}','')" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9CA3AF;font-size:18px;line-height:1;cursor:pointer;padding:0;">×</button>`:""}</div>`;}
 const GEMINI_WORKER_URL="https://familycart-gemini-proxy.fkaindls.workers.dev";
@@ -960,16 +979,14 @@ function render(){
 
 // ── TEMPLATE ──
   const tmplBought=tmpl.filter(i=>i.bought).length;
-  const _lf_tmpl=_lf.template;
-  const filtTmpl=_lf_tmpl?tmpl.filter(item=>`${item.name||""} ${item.note||""}`.toLowerCase().includes(_lf_tmpl)):tmpl;
-  let sortedTmpl=[...filtTmpl];
+  let sortedTmpl=[...tmpl];
   sortItems(sortedTmpl, shoppingSort);
   const renderTmplItem=item=>{
     const matched=findDeals(item.name,deals);
     const deal=matched.length?matched.slice().sort((a,b)=>parsePrice(a.price)-parsePrice(b.price))[0]:null;
     const extra=matched.length>1?matched.length-1:0;
     const dealTag=deal?`<button onclick="event.stopPropagation();openDealModal('${item.name.replace(/'/g,"\\'")}')" class="deal-badge tap" style="border:none;cursor:pointer;">🏷️ ${esc(deal.savings||deal.price||"Aktion")}${extra?` (+${extra})`:""}</button>`:"";
-    return `<div style="background:${item.bought?"#F5F5F0":"white"};border-radius:13px;padding:11px 13px;box-shadow:${item.bought?"none":"0 2px 8px rgba(0,0,0,0.06)"};opacity:${item.bought?.6:1};margin-bottom:6px;display:flex;align-items:center;gap:10px;transition:opacity .2s;">
+    return `<div data-tmpl-id="${item.fbKey}" data-tmpl-name="${esc(item.name)}" data-tmpl-note="${esc(item.note||"")}" style="background:${item.bought?"#F5F5F0":"white"};border-radius:13px;padding:11px 13px;box-shadow:${item.bought?"none":"0 2px 8px rgba(0,0,0,0.06)"};opacity:${item.bought?.6:1};margin-bottom:6px;display:flex;align-items:center;gap:10px;transition:opacity .2s;">
       <button onclick="toggleTemplate('${item.fbKey}')" class="tap" style="width:26px;height:26px;border-radius:8px;flex-shrink:0;border:none;background:${item.bought?"#6D28D9":"white"};box-shadow:${item.bought?"none":"inset 0 0 0 2px #D1D5DB"};display:flex;align-items:center;justify-content:center;cursor:pointer;">
         ${item.bought?"<span style='color:white;font-size:12px;font-weight:700;'>✓</span>":""}
       </button>
@@ -990,7 +1007,7 @@ function render(){
       `<button onclick="shoppingSort='${k}';render()" style="padding:4px 10px;border-radius:14px;border:none;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;background:${shoppingSort===k?"#1C2B1A":"#EEEEE8"};color:${shoppingSort===k?"white":"#6B7280"};">${l}</button>`
     ).join("")}
   </div>`;
-  let tmplHtml=`<div style="background:linear-gradient(135deg,#4C1D95,#6D28D9);border-radius:16px;padding:14px 16px;margin-bottom:14px;">
+  const tmplCard=`<div style="background:linear-gradient(135deg,#4C1D95,#6D28D9);border-radius:16px;padding:14px 16px;margin-bottom:14px;">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
       <span style="font-size:22px;">📌</span>
       <div><div style="font-weight:700;font-size:15px;color:white;">Zu besorgen</div>
@@ -1003,8 +1020,9 @@ function render(){
       <button onclick="resetTemplate()" class="tap" style="flex:1;padding:8px 0;background:rgba(255,255,255,0.15);border:none;border-radius:9px;color:white;font-size:11px;font-weight:600;cursor:pointer;">🔄 Alle zurücksetzen</button>
     </div>
   </div>`;
+  let tmplItemsHtml="";
   if(tmpl.length===0){
-    tmplHtml+=`<div style="text-align:center;color:#9CA3AF;padding:44px 0;"><div style="font-size:40px;">📌</div><div style="margin-top:8px;font-weight:500;">Noch keine Artikel</div><div style="font-size:12px;margin-top:4px;">In der Liste auf 📌 tippen</div></div>`;
+    tmplItemsHtml=`<div style="text-align:center;color:#9CA3AF;padding:44px 0;"><div style="font-size:40px;">📌</div><div style="margin-top:8px;font-weight:500;">Noch keine Artikel</div><div style="font-size:12px;margin-top:4px;">In der Liste auf 📌 tippen</div></div>`;
   } else if(shoppingSort==="cat"||shoppingSort==="store"){
     const groupFn=shoppingSort==="cat"
       ?(item=>item.cat||"❓ Sonstiges")
@@ -1015,15 +1033,17 @@ function render(){
       const grpName=shoppingSort==="store"?grpKey.split("|")[1]:grpKey;
       const storeId=shoppingSort==="store"?grpKey.split("|")[0]:null;
       const store=storeId?storeById(storeId):null;
-      tmplHtml+=`<div style="margin-bottom:14px;">
+      tmplItemsHtml+=`<div data-tmpl-group style="margin-bottom:14px;">
         <div style="font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:7px;padding:7px 11px;border-radius:9px;${store?"background:"+store.color+"12;color:"+store.color+";border-left:3px solid "+store.color:"background:#F3F4F6;color:#9CA3AF;"}">${grpName}</div>
         ${groups[grpKey].map(renderTmplItem).join("")}
       </div>`;
     });
   } else {
-    tmplHtml+=sortedTmpl.map(renderTmplItem).join("");
+    tmplItemsHtml+=sortedTmpl.map(renderTmplItem).join("");
   }
-  document.getElementById("tab-template").innerHTML=_searchBar("template","🔍 Einkaufsliste suchen...")+tmplSortBar+tmplHtml;
+  tmplItemsHtml+=`<div id="tmpl-filter-empty" hidden style="text-align:center;color:#9CA3AF;padding:20px 0;font-size:14px;">Keine Artikel gefunden</div>`;
+  document.getElementById("tab-template").innerHTML=_tmplSearchBar()+tmplSortBar+tmplCard+`<div id="tmpl-items-container">${tmplItemsHtml}</div>`;
+  applyTmplFilter(_tmplQuery);
 
   // ── DEALS ──
   const maximarktUploadSection=`
