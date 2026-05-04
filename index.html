@@ -277,7 +277,7 @@ const FB_CFG={
 
 let db=null, currentUser=null, currentTab="list", addTarget="list", listSort="default", shoppingSort="default";
 let state={items:{},template:{},deals:{},notifications:{},activeMarkets:null,favorites:{}};
-let _listQuery="",_listSearchTimer=null;
+let _listQuery="",_listSearchTimer=null,_renderListItem=null;
 let activeMarkets=null; // null = loading, array = loaded from /settings/activeMarkets
 let storePickerCallback=null;
 let dealRefreshTimer=null;
@@ -414,8 +414,29 @@ function filterTab(key,val){_lf[key]=val.toLowerCase().trim();render();}
 function normalize(s){return(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();}
 function _rankItem(name,q){const n=normalize(name);if(n===q)return 0;if(n.startsWith(q))return 1;if(n.includes(q))return 2;return-1;}
 function getSearchHits(items,query){const q=normalize(query.trim());if(!q)return[];return items.map(it=>({it,r:_rankItem(it.name,q)})).filter(x=>x.r>=0).sort((a,b)=>a.r-b.r||a.it.name.localeCompare(b.it.name,"de")).map(x=>x.it);}
-function listSearchInput(val){_listQuery=val;_lf.list=val.toLowerCase().trim();clearTimeout(_listSearchTimer);_listSearchTimer=setTimeout(render,150);}
-function _listSearchBar(){const v=_lf.list;return`<div style="position:relative;margin-bottom:10px;"><input id="search-list" type="text" value="${esc(v)}" oninput="listSearchInput(this.value)" placeholder="🔍 Artikel suchen..." style="width:100%;padding:8px ${v?"32px":"12px"} 8px 12px;border:1.5px solid #E5E7EB;border-radius:10px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;background:#FAFAFA;">${v?`<button onclick="listSearchInput('')" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9CA3AF;font-size:18px;line-height:1;cursor:pointer;padding:0;">×</button>`:""}</div>`;}
+function listSearchInput(val){_listQuery=val;_lf.list=val.toLowerCase().trim();clearTimeout(_listSearchTimer);_listSearchTimer=setTimeout(()=>applyListFilter(_listQuery),150);}
+function applyListFilter(q){
+  const ss=document.getElementById("list-search-section");
+  const fs=document.getElementById("list-fav-section");
+  const is=document.getElementById("list-items-section");
+  if(!ss||!fs||!is)return;
+  const query=q.trim();
+  const clr=document.getElementById("list-search-clear");
+  const inp=document.getElementById("search-list");
+  if(clr)clr.style.display=query?"":"none";
+  if(inp)inp.style.paddingRight=query?"32px":"12px";
+  if(!query){ss.hidden=true;fs.hidden=false;is.hidden=false;}
+  else{
+    const allItems=Object.entries(state.items||{}).map(([k,v])=>({...v,fbKey:k}));
+    const hits=getSearchHits(allItems,query);
+    ss.hidden=false;fs.hidden=true;is.hidden=true;
+    document.getElementById("list-search-count").textContent=hits.length;
+    document.getElementById("list-search-items").innerHTML=hits.length===0
+      ?'<div style="text-align:center;color:#9CA3AF;padding:20px 0;font-size:14px;">Keine Artikel gefunden</div>'
+      :(_renderListItem?hits.map((it,i)=>_renderListItem(it,i)).join(""):"");
+  }
+}
+function _listSearchBar(){const v=_lf.list;return`<div style="position:relative;margin-bottom:10px;"><input id="search-list" type="text" value="${esc(v)}" oninput="listSearchInput(this.value)" placeholder="🔍 Artikel suchen..." style="width:100%;padding:8px ${v?"32px":"12px"} 8px 12px;border:1.5px solid #E5E7EB;border-radius:10px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;background:#FAFAFA;"><button id="list-search-clear" onclick="listSearchInput('')" style="display:${v?"":"none"};position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9CA3AF;font-size:18px;line-height:1;cursor:pointer;padding:0;">×</button></div>`;}
 function _searchBar(key,ph){const v=_lf[key];return`<div style="position:relative;margin-bottom:10px;"><input id="search-${key}" type="text" value="${esc(v)}" oninput="filterTab('${key}',this.value)" placeholder="${ph}" style="width:100%;padding:8px ${v?"32px":"12px"} 8px 12px;border:1.5px solid #E5E7EB;border-radius:10px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;background:#FAFAFA;">${v?`<button onclick="filterTab('${key}','')" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9CA3AF;font-size:18px;line-height:1;cursor:pointer;padding:0;">×</button>`:""}</div>`;}
 const GEMINI_WORKER_URL="https://familycart-gemini-proxy.fkaindls.workers.dev";
 
@@ -912,12 +933,18 @@ function render(){
     else listHtml=sortedItems.map((item,i)=>renderListItem(item,i)).join("");
   }
 
+  _renderListItem=renderListItem;
   const favItems=items.filter(i=>userFavs[i.fbKey]).sort((a,b)=>a.name.localeCompare(b.name,"de"));
-  const favHtml=favItems.length>0?`<div style="margin-bottom:14px;">
+  const favInner=favItems.length>0?`
     <div style="font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:7px;padding:7px 11px;border-radius:9px;background:#FEF9C3;color:#B45309;border-left:3px solid #F59E0B;">⭐ Favoriten</div>
     ${favItems.map((item,i)=>renderListItem(item,i)).join("")}
-  </div>`:"";
-  document.getElementById("tab-list").innerHTML=_listSearchBar()+sortBar+favHtml+listHtml;
+  `:"";
+  const searchHdr=`<div style="font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:7px;padding:7px 11px;border-radius:9px;background:#EFF6FF;color:#1D4ED8;border-left:3px solid #3B82F6;">🔍 Suchergebnisse (<span id="list-search-count">0</span>)</div>`;
+  document.getElementById("tab-list").innerHTML=_listSearchBar()+sortBar+
+    `<div id="list-search-section" hidden style="margin-bottom:14px;">${searchHdr}<div id="list-search-items"></div></div>`+
+    `<div id="list-fav-section" style="margin-bottom:14px;">${favInner}</div>`+
+    `<div id="list-items-section">${listHtml}</div>`;
+  applyListFilter(_listQuery);
 
 // ── TEMPLATE ──
   const tmplBought=tmpl.filter(i=>i.bought).length;
