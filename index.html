@@ -472,13 +472,15 @@ function applyTmplFilter(q){
   if(clr)clr.style.display=qn?"":"none";
   if(inp){inp.style.paddingRight=qn?"32px":"12px";if(!qn)inp.value="";}
   c.querySelectorAll("[data-tmpl-id]").forEach(el=>{
-    el.hidden=!!qn&&!normalize(el.dataset.tmplName||"").includes(qn)&&!normalize(el.dataset.tmplNote||"").includes(qn);
+    const hide=!!qn&&!normalize(el.dataset.tmplName||"").includes(qn)&&!normalize(el.dataset.tmplNote||"").includes(qn);
+    el.style.display=hide?"none":"flex";
+    el.dataset.tmplVis=hide?"0":"1";
   });
   c.querySelectorAll("[data-tmpl-group]").forEach(g=>{
-    g.hidden=!!qn&&!g.querySelector("[data-tmpl-id]:not([hidden])");
+    g.style.display=(!!qn&&!g.querySelector("[data-tmpl-id][data-tmpl-vis='1']"))?"none":"";
   });
   const fe=document.getElementById("tmpl-filter-empty");
-  if(fe)fe.hidden=!qn||!!c.querySelector("[data-tmpl-id]:not([hidden])");
+  if(fe)fe.hidden=!qn||!!c.querySelector("[data-tmpl-id][data-tmpl-vis='1']");
 }
 function _tmplSearchBar(){const v=_lf.template;return`<div style="position:relative;margin-bottom:10px;"><input id="search-template" type="text" value="${esc(v)}" oninput="tmplSearchInput(this.value)" placeholder="🔍 Einkaufsliste suchen..." style="width:100%;padding:8px ${v?"32px":"12px"} 8px 12px;border:1.5px solid #E5E7EB;border-radius:10px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;background:#FAFAFA;"><button id="tmpl-search-clear" onclick="tmplSearchInput('')" style="display:${v?"":"none"};position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9CA3AF;font-size:18px;line-height:1;cursor:pointer;padding:0;">×</button></div>`;}
 function _listSearchBar(){const v=_lf.list;return`<div style="position:relative;margin-bottom:10px;"><input id="search-list" type="text" value="${esc(v)}" oninput="listSearchInput(this.value)" placeholder="🔍 Artikel suchen..." style="width:100%;padding:8px ${v?"32px":"12px"} 8px 12px;border:1.5px solid #E5E7EB;border-radius:10px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;background:#FAFAFA;"><button id="list-search-clear" onclick="listSearchInput('')" style="display:${v?"":"none"};position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9CA3AF;font-size:18px;line-height:1;cursor:pointer;padding:0;">×</button></div>`;}
