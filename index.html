@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/firebase@10.12.0/firebase-app-compat.js"></script>
 <script src="https://unpkg.com/firebase@10.12.0/firebase-database-compat.js"></script>
+<script src="https://unpkg.com/firebase@10.12.0/firebase-auth-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
@@ -285,31 +286,48 @@ let lastDealRefresh=0;
 const _lf={list:"",template:"",deals:""};
 
 // ── Init ─────────────────────────────────────────────────────────────────
+let _listenersAttached=false;
+function attachListeners(){
+  if(_listenersAttached) return;
+  _listenersAttached=true;
+  ["items","template","deals","notifications"].forEach(k=>{
+    db.ref(k).on("value",snap=>{state[k]=snap.val()||{};render();});
+  });
+  db.ref("favorites").on("value",snap=>{state.favorites=snap.val()||{};render();});
+  db.ref("settings/activeMarkets").on("value",snap=>{
+    const val=snap.val();
+    activeMarkets=Array.isArray(val)?val:["hofer","lidl","eurospar","maximarkt"];
+    state.activeMarkets=activeMarkets;
+    render();
+    if(document.getElementById("setupScreen").style.display!=="none") renderMarketsSettings();
+  },err=>{
+    console.warn("settings/activeMarkets read error:",err.message,"– using defaults");
+    activeMarkets=["hofer","lidl","eurospar","maximarkt"];
+    state.activeMarkets=activeMarkets;
+    if(document.getElementById("setupScreen").style.display!=="none") renderMarketsSettings();
+  });
+  // Eagerly fetch deals once so badges appear immediately before the real-time listener fires
+  db.ref("deals").once("value").then(snap=>{if(Object.keys(state.deals).length===0){state.deals=snap.val()||{};render();}}).catch(err=>console.warn("[FB] deals eager-fetch:",err.message));
+  document.getElementById("loginStatus").textContent="✅ Verbunden";
+}
+
 function initApp(){
   if(typeof firebase==="undefined"){setTimeout(initApp,500);return;}
   try{
     const cfg=JSON.parse(localStorage.getItem("fc_cfg")||"null")||FB_CFG;
     if(!firebase.apps.length) firebase.initializeApp(cfg);
     db=firebase.database();
-    ["items","template","deals","notifications"].forEach(k=>{
-      db.ref(k).on("value",snap=>{state[k]=snap.val()||{};render();});
+    const auth=firebase.auth();
+    auth.onAuthStateChanged(async user=>{
+      if(user){
+        await user.getIdToken();
+        console.log("[FB] anonym authentifiziert:",user.uid);
+        attachListeners();
+      }
     });
-    db.ref("favorites").on("value",snap=>{state.favorites=snap.val()||{};render();});
-    db.ref("settings/activeMarkets").on("value",snap=>{
-      const val=snap.val();
-      activeMarkets=Array.isArray(val)?val:["hofer","lidl","eurospar","maximarkt"];
-      state.activeMarkets=activeMarkets;
-      render();
-      if(document.getElementById("setupScreen").style.display!=="none") renderMarketsSettings();
-    },err=>{
-      console.warn("settings/activeMarkets read error:",err.message,"– using defaults");
-      activeMarkets=["hofer","lidl","eurospar","maximarkt"];
-      state.activeMarkets=activeMarkets;
-      if(document.getElementById("setupScreen").style.display!=="none") renderMarketsSettings();
+    auth.signInAnonymously().catch(err=>{
+      document.getElementById("loginStatus").textContent="⚠️ Auth fehlgeschlagen: "+err.message;
     });
-    // Eagerly fetch deals once so badges appear immediately before the real-time listener fires
-    db.ref("deals").once("value").then(snap=>{if(Object.keys(state.deals).length===0){state.deals=snap.val()||{};render();}});
-    document.getElementById("loginStatus").textContent="✅ Verbunden";
   }catch(e){
     document.getElementById("loginStatus").textContent="⚠️ "+e.message;
   }
@@ -354,7 +372,7 @@ function renderMarketsSettings(){
   el.innerHTML=html;
 }
 function toggleMarket(marketId,checked){
-  if(activeMarkets===null||!db)return;
+  if(activeMarkets===null||!db||!firebase.auth().currentUser)return;
   let updated=activeMarkets.filter(id=>id!==marketId);
   if(checked)updated.push(marketId);
   activeMarkets=updated;
