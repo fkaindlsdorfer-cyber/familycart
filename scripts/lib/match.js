@@ -1,5 +1,6 @@
 export const STOP_TOKENS = new Set([
-  "bier","wein","sauce","salat","käse","fleisch","fisch","milch","brot","wurst","eis","saft","tee",
+  "bier","wein","sauce","salat","käse","käswurst","fleisch","fisch","milch","brot","wurst","eis","saft","tee",
+  "wiener","bayrisch","tiroler","steirisch",
 ]);
 
 export function pluralStem(s) {
@@ -32,8 +33,8 @@ export function matchesArticleName(articleName, fullText) {
 
   // Rule C: multi-token items only
   if (needleTokens.length >= 2) {
-    // first token (brand heuristic): >=7 chars to match alone
-    if (needleTokens[0].length >= 7 && haystackStems.includes(needleStems[0])) return true;
+    // first token (brand heuristic): >=4 chars AND not in stop list
+    if (needleTokens[0].length >= 4 && !STOP_TOKENS.has(needleTokens[0]) && haystackStems.includes(needleStems[0])) return true;
     // last token (category): >=5 chars AND not in stop list
     const lastToken = needleTokens[needleTokens.length - 1];
     const lastStem  = needleStems[needleTokens.length - 1];
