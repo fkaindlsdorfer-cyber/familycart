@@ -4,6 +4,13 @@ on:
   schedule:
     - cron: '0 2 * * *'   # Täglich 02:00 Uhr nachts
   workflow_dispatch:        # Manuell auslösbar zum Testen
+    inputs:
+      debug_maximarkt:
+        description: 'DEBUG_MAXIMARKT=1 aktivieren (Diagnose-Logging + nur 1 Seite)'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
 
 jobs:
   check-deals:
@@ -28,5 +35,6 @@ jobs:
           FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DEBUG_MAXIMARKT: ${{ github.event.inputs.debug_maximarkt == 'true' && '1' || '0' }}
         run: node check-deals.js
         working-directory: ./scripts

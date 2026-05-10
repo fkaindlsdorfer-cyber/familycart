@@ -19,6 +19,7 @@ let   currentModel            = GEMINI_MODEL_PRIMARY;
 const ZIP_CODE                = "5204"; // Strasswalchen
 
 const SKIP_OUTDOOR_LEAFLETS = true; // "Outdoor"-Prospekte überspringen
+const DEBUG_MAXIMARKT = process.env.DEBUG_MAXIMARKT === "1";
 
 initializeApp({ credential: cert(FIREBASE_SERVICE), databaseURL: FIREBASE_DB_URL });
 const db = getDatabase();
@@ -147,6 +148,16 @@ async function callGeminiWithRetry(base64, prompt, maxRetries = 3) {
   const TEMPORARY_ERRORS = [429, 500, 502, 503, 504];
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const generationConfig = {
+      temperature:      0,
+      maxOutputTokens:  8192,
+      responseMimeType: "application/json",
+      thinkingConfig:   { thinkingBudget: 0 },
+    };
+    if (DEBUG_MAXIMARKT && attempt === 0) {
+      console.log(`[DBG] model: ${currentModel}`);
+      console.log(`[DBG] config: ${JSON.stringify(generationConfig)}`);
+    }
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${GEMINI_API_KEY}`,
       {
@@ -157,16 +168,19 @@ async function callGeminiWithRetry(base64, prompt, maxRetries = 3) {
             { inlineData: { mimeType: "image/jpeg", data: base64 } },
             { text: prompt },
           ]}],
-          generationConfig: {
-              temperature:      0,
-              maxOutputTokens:  8192,
-              responseMimeType: "application/json",
-              thinkingConfig:   { thinkingBudget: 0 },
-            },
+          generationConfig,
         }),
       }
     );
     const data = await res.json();
+    if (DEBUG_MAXIMARKT) {
+      console.log(`[DBG] HTTP status: ${res.status}`);
+      console.log(`[DBG] raw JSON:\n${JSON.stringify(data, null, 2)}`);
+      console.log(`[DBG] candidates count: ${data?.candidates?.length}`);
+      console.log(`[DBG] finishReason: ${data?.candidates?.[0]?.finishReason}`);
+      console.log(`[DBG] safetyRatings: ${JSON.stringify(data?.candidates?.[0]?.safetyRatings)}`);
+      console.log(`[DBG] usageMetadata: ${JSON.stringify(data?.usageMetadata)}`);
+    }
 
     if (!data.error) return data;
 
@@ -219,6 +233,11 @@ async function scanMaximarktLeaflet(leaflet, articles) {
         await sleep(4000); continue;
       }
       const base64 = Buffer.from(await imgRes.arrayBuffer()).toString("base64");
+      if (DEBUG_MAXIMARKT) {
+        console.log(`[DBG] image MIME: image/jpeg`);
+        console.log(`[DBG] image base64 length: ${base64.length}`);
+        console.log(`[DBG] base64 prefix: ${base64.substring(0, 50)}`);
+      }
 
       const prompt =
         `Das ist Seite ${page + 1} aus dem Maximarkt Prospekt "${leaflet.name}" (gültig bis ${leaflet.validTo}).
@@ -243,16 +262,14 @@ Antworte NUR mit JSON – keine weiteren Texte:
 {"deals":[{"productName":"Vollständiger Produktname inkl. Marke und Variante","price":"1,99 EUR","savings":"-20%","oldPrice":"2,49 EUR","boundingBox":[100,50,400,950]}]}
 Keine Treffer: {"deals":[]}`;
 
+      if (DEBUG_MAXIMARKT) {
+        console.log(`[DBG] prompt length: ${prompt.length}`);
+      }
       const data = await callGeminiWithRetry(base64, prompt);
 
       if (data === null) {
         skippedPages++;
         await sleep(4000); continue;
-      }
-
-      if (page === 0) {
-        console.log(`[RAW-API] leaflet=${leaflet.id} page=0`);
-        console.log(JSON.stringify(data, null, 2).slice(0, 2000));
       }
 
       const finishReason = data.candidates?.[0]?.finishReason;
@@ -320,6 +337,7 @@ Keine Treffer: {"deals":[]}`;
     }
 
     await sleep(4000);
+    if (DEBUG_MAXIMARKT) { console.log(`[DBG] DEBUG_MAXIMARKT: early exit after page 0`); break; }
   }
 
   if (skippedPages > totalPages / 2 && currentModel === GEMINI_MODEL_PRIMARY) {
