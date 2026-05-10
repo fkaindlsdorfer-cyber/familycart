@@ -15,13 +15,20 @@ const cases = [
   [9,  "Zipfer Bier",          "0,3l Bier (Restaurant)",              false,   "Zipfer fehlt; bier in Stop-Liste und <5 Zeichen"],
   [10, "Manner",               "Manner Neapolitaner",                  true,    "Einzeltoken passt"],
   [11, "Wiener knusperbraten", "Wiener Schnitzel",                    false,   "wiener in Stop-Liste; knusperbraten fehlt"],
-  [12, "Erdbeeren",            "Bristot Bauletti Erdbeere",           true,    "Plural-Stemming en→''"],
-  [13, "Erdbeeren",            "Danone Actimel Erdbeere",             true,    "Plural-Stemming (bewusstes FP akzeptiert)"],
+  [12, "Erdbeeren",            "Bristot Bauletti Erdbeere",           false,   "Singular im Deal: kein -e-Stem mehr"],
+  [13, "Erdbeeren",            "Danone Actimel Erdbeere",             false,   "Singular im Deal: kein -e-Stem mehr"],
   [14, "Bananen",              "Bruno Banani Vanilla Muse Set",       false,   "banani kein Plural-Stem von bananen"],
   [15, "Bananen",              "Hauswirth Schokobananen",             false,   "kein Wortgrenzen-Match im Kompositum"],
   [16, "Zipfer Bier",          "Zipfer Urtyp",                         true,    "echter Marken-Match aus Log: Zipfer=6 Zeichen, sollte trotzdem matchen"],
   [17, "Loidl käswurst",       "Loidl Kantwurst",                      true,    "echter Marken-Match aus Log: Loidl=5 Zeichen, sollte trotzdem matchen"],
   [18, "Kinder Country",       "Ferrero Kinder Country",               true,    "Phrase-Match: ganze Phrase im Deal, Token-Längen irrelevant"],
+  [19, "spare ribs",           "SPAR Schlagsahne sprühfertig",         false,   "spare→spare (kein -e-Stem), matcht nicht spar"],
+  [20, "spare ribs",           "SPAR Butterdose",                      false,   "spare ohne -e-Stem, ribs=4 Zeichen → kein last-token-match"],
+  [21, "Brokkoli frisch",      "Parodontax Zahncreme extra frisch",    false,   "frisch in Stop-Liste"],
+  [22, "Brokkoli frisch",      "Rudolf Rabl Grüner Veltliner Frisch und fruchtig", false, "frisch in Stop-Liste"],
+  [23, "Cheddar in Scheiben",  "Schärdinger Bergbaron in Scheiben",    false,   "scheiben in Stop-Liste; cheddar fehlt in Deal"],
+  [24, "Manner mignon schnitten", "Österr. Grillbauch-Schnitten vom Schwein", false, "schnitten in Stop-Liste; manner fehlt in Deal"],
+  [25, "Taschentücher Boxen",  "Simpex Kunststoffboxen Box S 4,5 Liter", false, "boxen in Stop-Liste"],
 ];
 
 describe("matchesArticleName", () => {

@@ -1,11 +1,13 @@
 export const STOP_TOKENS = new Set([
   "bier","wein","sauce","salat","käse","käswurst","fleisch","fisch","milch","brot","wurst","eis","saft","tee",
   "wiener","bayrisch","tiroler","steirisch",
+  "frisch","frische","frischer","scheiben","scheibe","schnitten","schnitte","boxen","box",
+  "mariniert","gewürzt","geräuchert",
 ]);
 
+// only en/n/s — no -e, to prevent "spare"→"spar" matching "SPAR"
 export function pluralStem(s) {
   if (s.length > 4 && s.endsWith("en")) return s.slice(0, -2);
-  if (s.length > 4 && s.endsWith("e"))  return s.slice(0, -1);
   if (s.length > 3 && s.endsWith("n"))  return s.slice(0, -1);
   if (s.length > 3 && s.endsWith("s"))  return s.slice(0, -1);
   return s;
