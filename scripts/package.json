@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "seed": "node seed-markets.js",
-    "check-deals": "node check-deals.js"
+    "check-deals": "node check-deals.js",
+    "test": "node --test __tests__/match-logic.test.js"
   },
   "dependencies": {
     "firebase-admin": "^12.0.0",

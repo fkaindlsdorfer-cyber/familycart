@@ -7,6 +7,7 @@
 import { initializeApp, cert } from "firebase-admin/app";
 import { getDatabase }         from "firebase-admin/database";
 import { search }              from "marktguru.at";
+import { matchesArticleName }  from "./lib/match.js";
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -47,34 +48,6 @@ function normalizeStore(name) {
   if (n.includes("norma"))                                 return "norma";
   if (n.includes("mömax") || n.includes("moemax"))         return "moemax";
   return n;
-}
-
-// ── Wort-Boundary-Validierung ─────────────────────────────────────────────────
-function escapeRegex(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function germanStem(token) {
-  if (token.length > 6 && token.endsWith("nen")) return token.slice(0, -3);
-  if (token.length > 5 && token.endsWith("en"))  return token.slice(0, -2);
-  if (token.length > 5 && token.endsWith("er"))  return token.slice(0, -2);
-  if (token.length > 4 && token.endsWith("e"))   return token.slice(0, -1);
-  if (token.length > 4 && token.endsWith("n"))   return token.slice(0, -1);
-  if (token.length > 4 && token.endsWith("s"))   return token.slice(0, -1);
-  return token;
-}
-
-function matchesArticleName(articleName, fullText) {
-  const tokens = (articleName || "").toLowerCase()
-    .replace(/[^\wäöüß\s-]/g, " ")
-    .split(/[\s-]+/)
-    .filter(t => t.length >= 4);
-  if (!tokens.length) return false;
-  const hay = (fullText || "").toLowerCase();
-  return tokens.some(t => {
-    const stem = germanStem(t);
-    return new RegExp(`\\b${escapeRegex(stem)}\\w*\\b`, 'u').test(hay);
-  });
 }
 
 // ── Marktguru API-Key extraction ──────────────────────────────────────────────
