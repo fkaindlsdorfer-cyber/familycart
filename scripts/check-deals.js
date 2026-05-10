@@ -123,6 +123,11 @@ async function fetchMaximarktLeaflets() {
         console.log(`   ⏭️  ID ${id} übersprungen (Outdoor-Prospekt: ${pageCount} Seiten, 0 offers)`);
         return false;
       }
+      if (pageCount === 1) {
+        const id = r.mainLeafletId || r.id;
+        console.log(`   ⏭️  ID ${id} übersprungen (Restaurant-Karte: 1 Seite)`);
+        return false;
+      }
       return true;
     })
     .map(r => ({
@@ -257,6 +262,8 @@ WICHTIGE REGELN:
 6. boundingBox: [ymin, xmin, ymax, xmax] mit normalisierten Koordinaten 0–1000.
    Die Box muss den kompletten Aktions-Bereich umschließen: Produktbild + Preis-Block + Aktions-Hinweis.
    Format ist EXAKT so: [ymin, xmin, ymax, xmax] (Reihenfolge beachten!).
+
+WICHTIG: Falls dieses Bild eine RESTAURANT-SPEISEKARTE zeigt (Tagesmenü, Tagessuppe, Wiener Schnitzel, Hauptspeise, Beilagen usw. — Einzelgerichte für den Restaurant-Verzehr, KEINE verpackten Supermarktprodukte), gib {"deals":[]} zurück.
 
 Antworte NUR mit JSON – keine weiteren Texte:
 {"deals":[{"productName":"Vollständiger Produktname inkl. Marke und Variante","price":"1,99 EUR","savings":"-20%","oldPrice":"2,49 EUR","boundingBox":[100,50,400,950]}]}
