@@ -192,7 +192,7 @@ async function scanMaximarktLeaflet(leaflet, articles) {
 
   const estSecs = leaflet.pageCount * 4;
   console.log(`\n🤖 Scanne "${leaflet.name}" (${leaflet.pageCount} Seiten, ~${estSecs}s)...`);
-  console.log(`[DBG] KEY_LEN=${GEMINI_API_KEY?.length || 0}`);
+  if (DEBUG_MAXIMARKT) console.log(`[DBG] KEY_LEN=${GEMINI_API_KEY?.length || 0}`);
   const itemList    = articles.map(a => a.name).slice(0, 60).join(", ");
   const checkedAt   = new Date().toISOString();
   const deals       = [];
@@ -201,7 +201,7 @@ async function scanMaximarktLeaflet(leaflet, articles) {
 
   for (let page = 0; page < totalPages; page++) {
     const imageUrl = `https://mgat.b-cdn.net/api/v1/leaflets/${leaflet.id}/images/pages/${page}/xlarge.webp`;
-    if (page === 0) console.log(`   Image URL: ${imageUrl}`);
+    if (DEBUG_MAXIMARKT && page === 0) console.log(`[DBG] Image URL: ${imageUrl}`);
     process.stdout.write(`   📄 Seite ${page + 1}/${totalPages}... `);
 
     try {
@@ -260,7 +260,7 @@ Keine Treffer: {"deals":[]}`;
       }
 
       const rawText = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
-      console.log(`[DBG] leaflet=${leaflet.id} page=${page} finishReason=${finishReason} responseText=|${rawText.slice(0, 500)}| length=${rawText.length}`);
+      if (DEBUG_MAXIMARKT) console.log(`[DBG] leaflet=${leaflet.id} page=${page} finishReason=${finishReason} responseText=|${rawText.slice(0, 500)}| length=${rawText.length}`);
       const jsonM = rawText.match(/\{[\s\S]*\}/);
 
       if (jsonM) {
