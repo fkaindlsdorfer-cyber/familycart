@@ -1,3 +1,8 @@
+> **Status (2026-05-11):** Diese Spec ist historisch — die finale
+> Implementierung weicht ab. Tatsächlich umgesetzt in `scripts/lib/match.js`
+> mit `pluralStem()` + `STOP_TOKENS` + Phrase-Match-Regeln.
+> Siehe `scripts/__tests__/match-logic.test.js` für aktuelle Tests.
+
 # Task: Deal-Matching mit Stem-basiertem Wort-Boundary
 
 ## Problem
