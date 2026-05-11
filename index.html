@@ -11,7 +11,6 @@
 <script src="https://unpkg.com/firebase@10.12.0/firebase-app-compat.js"></script>
 <script src="https://unpkg.com/firebase@10.12.0/firebase-database-compat.js"></script>
 <script src="https://unpkg.com/firebase@10.12.0/firebase-auth-compat.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 body{font-family:'DM Sans',sans-serif;background:#FAFAF7;max-width:430px;margin:0 auto;min-height:100vh;overflow-x:hidden;}
@@ -503,8 +502,6 @@ function applyTmplFilter(q){
 function _tmplSearchBar(){const v=_lf.template;return`<div style="position:relative;margin-bottom:10px;"><input id="search-template" type="text" value="${esc(v)}" oninput="tmplSearchInput(this.value)" placeholder="🔍 Einkaufsliste suchen..." style="width:100%;padding:8px ${v?"32px":"12px"} 8px 12px;border:1.5px solid #E5E7EB;border-radius:10px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;background:#FAFAFA;"><button id="tmpl-search-clear" onclick="tmplSearchInput('')" style="display:${v?"":"none"};position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9CA3AF;font-size:18px;line-height:1;cursor:pointer;padding:0;">×</button></div>`;}
 function _listSearchBar(){const v=_lf.list;return`<div style="position:relative;margin-bottom:10px;"><input id="search-list" type="text" value="${esc(v)}" oninput="listSearchInput(this.value)" placeholder="🔍 Artikel suchen..." style="width:100%;padding:8px ${v?"32px":"12px"} 8px 12px;border:1.5px solid #E5E7EB;border-radius:10px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;background:#FAFAFA;"><button id="list-search-clear" onclick="listSearchInput('')" style="display:${v?"":"none"};position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9CA3AF;font-size:18px;line-height:1;cursor:pointer;padding:0;">×</button></div>`;}
 function _searchBar(key,ph){const v=_lf[key];return`<div style="position:relative;margin-bottom:10px;"><input id="search-${key}" type="text" value="${esc(v)}" oninput="filterTab('${key}',this.value)" placeholder="${ph}" style="width:100%;padding:8px ${v?"32px":"12px"} 8px 12px;border:1.5px solid #E5E7EB;border-radius:10px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;background:#FAFAFA;">${v?`<button onclick="filterTab('${key}','')" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9CA3AF;font-size:18px;line-height:1;cursor:pointer;padding:0;">×</button>`:""}</div>`;}
-const GEMINI_WORKER_URL="https://familycart-gemini-proxy.fkaindls.workers.dev";
-
 function switchTab(t){
   currentTab=t;
   document.querySelectorAll(".tab-btn").forEach(b=>b.classList.toggle("active",b.getAttribute("data-tab")===t));
@@ -1083,20 +1080,6 @@ function render(){
   applyTmplFilter(_tmplQuery);
 
   // ── DEALS ──
-  const maximarktUploadSection=`
-    <div style="background:white;border-radius:16px;padding:14px 16px;box-shadow:0 2px 10px rgba(0,0,0,0.07);margin-bottom:14px;border:1.5px dashed #E5E7EB;">
-      <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px;">
-        <span style="font-size:22px;">🏪</span>
-        <div>
-          <div style="font-weight:700;font-size:14px;color:#111827;">Maximarkt Flugblatt hochladen</div>
-          <div style="font-size:11px;color:#6B7280;">PDF auswählen → Gemini sucht passende Angebote</div>
-        </div>
-      </div>
-      <button onclick="document.getElementById('maximarktPdfInput').click()" class="tap" style="width:100%;padding:11px;background:#FEE2E2;border:1.5px dashed #FECACA;border-radius:11px;font-size:13px;font-weight:700;color:#B91C1C;cursor:pointer;margin-bottom:0;">📄 Maximarkt Flugblatt (PDF) auswählen</button>
-      <input type="file" id="maximarktPdfInput" accept="application/pdf" style="display:none;" onchange="uploadMaximarktFlugblatt(this)">
-      <div id="maximarktStatus" style="margin-top:8px;"></div>
-    </div>`;
-
   const dealsHtml = activeMarkets===null
     ? [80,60,72,50,65].map(w=>`<div style="background:white;border-radius:15px;padding:14px;margin-bottom:8px;"><div style="height:14px;width:${w}%;background:#F3F4F6;border-radius:6px;animation:pulse 1.2s ease-in-out infinite;"></div><div style="height:10px;width:40%;background:#F3F4F6;border-radius:6px;margin-top:10px;animation:pulse 1.2s ease-in-out infinite;"></div></div>`).join("")
     : deals.length === 0
@@ -1122,7 +1105,7 @@ function render(){
     }).join("");
 
   const dealsFilterEmpty=`<div id="deals-filter-empty" hidden style="text-align:center;color:#9CA3AF;padding:20px 0;font-size:14px;">Keine Aktionen gefunden</div>`;
-  document.getElementById("tab-deals").innerHTML=maximarktUploadSection+_dealsSearchBar()+`<div id="deals-items-container">${dealsHtml}${dealsFilterEmpty}</div>`;
+  document.getElementById("tab-deals").innerHTML=_dealsSearchBar()+`<div id="deals-items-container">${dealsHtml}${dealsFilterEmpty}</div>`;
   applyDealsFilter(_dealsQuery);
 
   // ── NOTIFS (fixed: filter by to===currentUser) ──
@@ -1145,134 +1128,6 @@ function render(){
   if(document.getElementById("shopMode").classList.contains("active")) renderShopMode();
   // Restore search focus after re-render
   if(_focusId&&_focusId.startsWith("search-")){const _el=document.getElementById(_focusId);if(_el){_el.focus();try{_el.setSelectionRange(_el.value.length,_el.value.length);}catch(e){}}}
-}
-
-// ── Maximarkt Flugblatt PDF Upload ────────────────────────────────────────
-async function uploadMaximarktFlugblatt(input){
-  const file=input.files[0];
-  if(!file)return;
-  input.value="";
-  const statusEl=document.getElementById("maximarktStatus");
-  console.log("[Maximarkt] PDF Upload gestartet:", file.name);
-  if(statusEl)statusEl.innerHTML=`<div style="background:#1C2B1A;border-radius:11px;padding:11px 13px;">
-    <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px;"><span style="font-size:16px;">📄</span><div style="font-size:12px;color:white;font-weight:600;">PDF wird gelesen...</div></div>
-    ${[80,60,45].map(w=>`<div style="height:6px;width:${w}%;border-radius:3px;background:rgba(255,255,255,0.15);margin-bottom:4px;animation:pulse 1.2s ease-in-out infinite;"></div>`).join("")}
-  </div>`;
-
-  try{
-    // Step 1: Extract text from PDF using PDF.js
-    console.log("[Maximarkt] Schritt 1: PDF Text-Extraktion via PDF.js");
-    const arrayBuffer=await file.arrayBuffer();
-    pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-    const pdfDoc=await pdfjsLib.getDocument({data:arrayBuffer}).promise;
-    console.log("[Maximarkt] PDF geladen, Seiten:", pdfDoc.numPages);
-
-    const maxPages=Math.min(pdfDoc.numPages,10);
-    let pdfText="";
-    for(let p=1;p<=maxPages;p++){
-      const page=await pdfDoc.getPage(p);
-      const content=await page.getTextContent();
-      pdfText+=content.items.map(it=>it.str).join(" ")+"\n";
-    }
-    pdfText=pdfText.slice(0,6000);
-    console.log("[Maximarkt] Extrahierter Text (erste 300 Zeichen):", pdfText.slice(0,300));
-
-    if(!pdfText.trim()){
-      throw new Error("PDF enthält keinen lesbaren Text (möglicherweise ein Bild-PDF).");
-    }
-
-    // Step 2: Collect item names from Firebase
-    const allNames=[
-      ...Object.values(state.items||{}).map(i=>i.name),
-      ...Object.values(state.template||{}).map(i=>i.name)
-    ].filter((v,i,a)=>v&&a.indexOf(v)===i);
-    console.log("[Maximarkt] Artikel aus Firebase:", allNames);
-
-    // Step 3: Update status to show Gemini is running
-    if(statusEl)statusEl.innerHTML=`<div style="background:#1C2B1A;border-radius:11px;padding:11px 13px;">
-      <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px;"><span style="font-size:16px;">🤖</span><div style="font-size:12px;color:white;font-weight:600;">Gemini analysiert Angebote...</div></div>
-      ${[80,60,45].map(w=>`<div style="height:6px;width:${w}%;border-radius:3px;background:rgba(255,255,255,0.15);margin-bottom:4px;animation:pulse 1.2s ease-in-out infinite;"></div>`).join("")}
-    </div>`;
-
-    // Step 4: Build compact prompt and call Gemini with retry on 429
-    const itemList=allNames.slice(0,50).join(", ");
-    const prompt=`Maximarkt Flugblatt-Text:\n${pdfText}\n\nGesuchte Artikel: ${itemList}\n\nWelche Artikel sind im Flugblatt mit Preis/Rabatt? Antworte NUR mit JSON:\n{"deals":[{"articleName":"Name","price":"1,99 EUR","savings":"-20%","validUntil":"20.04.2026"}]}\nKeine Treffer: {"deals":[]}`;
-    console.log("[Maximarkt] Prompt-Länge:", prompt.length, "Zeichen");
-
-    const callGemini=async()=>{
-      const r=await fetch(GEMINI_WORKER_URL,{
-        method:"POST",headers:{"content-type":"application/json"},
-        body:JSON.stringify({
-          contents:[{parts:[{text:prompt}]}],
-          generationConfig:{temperature:0,maxOutputTokens:1000}
-        })
-      });
-      return r;
-    };
-
-    console.log("[Maximarkt] Sende Anfrage an Gemini API...");
-    let res=await callGemini();
-    if(res.status===429){
-      console.log("[Maximarkt] Rate limit (429) – warte 10 Sekunden und versuche nochmal...");
-      if(statusEl)statusEl.innerHTML=`<div style="background:#1C2B1A;border-radius:11px;padding:11px 13px;">
-        <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px;"><span style="font-size:16px;">⏳</span><div style="font-size:12px;color:white;font-weight:600;">Rate Limit – warte 10 Sekunden...</div></div>
-      </div>`;
-      await new Promise(r=>setTimeout(r,10000));
-      res=await callGemini();
-    }
-    if(res.status===429){
-      throw new Error("Zu viele Anfragen – bitte 1 Minute warten und nochmal versuchen.");
-    }
-
-    const data=await res.json();
-    console.log("[Maximarkt] Gemini API Antwort (vollständig):", JSON.stringify(data));
-
-    const rawText=(data.candidates?.[0]?.content?.parts||[]).map(p=>p.text||"").join("");
-    console.log("[Maximarkt] Extrahierter Text aus Antwort:", rawText);
-
-    if(data.error){
-      const msg=data.error.message||"";
-      if(data.error.code===429||msg.includes("quota")||msg.includes("RESOURCE_EXHAUSTED")){
-        throw new Error("Zu viele Anfragen – bitte 1 Minute warten und nochmal versuchen.");
-      }
-      throw new Error("Gemini API Fehler: "+msg);
-    }
-
-    let result;
-    try{
-      result=JSON.parse(rawText);
-    }catch(_){
-      const m=rawText.match(/\{[\s\S]*\}/);
-      if(!m)throw new Error("Keine JSON-Antwort von Gemini. Rohantwort: "+rawText.slice(0,400));
-      try{result=JSON.parse(m[0]);}catch(e2){throw new Error("Ungültiges JSON von Gemini. Rohantwort: "+rawText.slice(0,400));}
-    }
-    const foundDeals=result.deals||[];
-    console.log("[Maximarkt] Gefundene Deals:", foundDeals);
-
-    if(foundDeals.length===0){
-      if(statusEl)statusEl.innerHTML=`<div style="font-size:12px;color:#6B7280;background:#F9FAFB;border-radius:9px;padding:9px 11px;text-align:center;">🤷 Keine passenden Angebote im Flugblatt gefunden.</div>`;
-      return;
-    }
-
-    // Delete old Maximarkt deals, save new ones
-    const oldKeys=Object.entries(state.deals||{}).filter(([,v])=>v.storeName==="Maximarkt").map(([k])=>k);
-    await Promise.all(oldKeys.map(k=>db.ref("deals/"+k).remove()));
-    await Promise.all(foundDeals.map(d=>db.ref("deals").push({
-      articleName:d.articleName,
-      storeName:"Maximarkt",
-      storeId:"maximarkt",
-      price:d.price||"",
-      savings:d.savings||"",
-      validUntil:d.validUntil||"",
-      url:""
-    })));
-
-    console.log("[Maximarkt]", foundDeals.length, "Deals in Firebase gespeichert.");
-    if(statusEl)statusEl.innerHTML=`<div style="font-size:12px;color:#16A34A;background:#F0FDF4;border-radius:9px;padding:9px 11px;font-weight:700;text-align:center;">✅ ${foundDeals.length} Angebot${foundDeals.length===1?"":"e"} aus dem Flugblatt gespeichert!</div>`;
-  }catch(e){
-    console.error("[Maximarkt] Fehler:", e);
-    if(statusEl)statusEl.innerHTML=`<div style="font-size:12px;color:#EF4444;background:#FFF5F5;border-radius:9px;padding:9px 11px;">⚠️ Fehler: ${esc(e.message)}</div>`;
-  }
 }
 
 window.addEventListener("load",initApp);
