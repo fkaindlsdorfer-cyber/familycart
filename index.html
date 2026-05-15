@@ -278,6 +278,8 @@ const FB_CFG={
 let db=null, currentUser=null, currentTab="list", addTarget="list", listSort="default", shoppingSort="default";
 let state={items:{},template:{},deals:{},notifications:{},activeMarkets:null,favorites:{}};
 let _listQuery="",_listSearchTimer=null,_renderListItem=null,_tmplQuery="",_tmplSearchTimer=null,_dealsQuery="",_dealsSearchTimer=null;
+let _dealSort=localStorage.getItem("dealSort")||"newest";
+let _dealStoreFilter=(()=>{try{return JSON.parse(localStorage.getItem("dealStoreFilter")||"null");}catch(e){return null;}})();
 let activeMarkets=null; // null = loading, array = loaded from /settings/activeMarkets
 let storePickerCallback=null;
 let dealRefreshTimer=null;
@@ -471,12 +473,16 @@ function applyDealsFilter(q){
   const qn=normalize(q.trim());
   if(clr)clr.style.display=qn?"":"none";
   if(inp){inp.style.paddingRight=qn?"32px":"12px";if(!qn)inp.value="";}
+  const allStoresActive=!_dealStoreFilter||_dealStoreFilter.length===0;
   c.querySelectorAll("[data-deal-id]").forEach(el=>{
-    el.hidden=!!qn&&!normalize(el.dataset.dealName||"").includes(qn)&&!normalize(el.dataset.dealStore||"").includes(qn)&&!normalize(el.dataset.dealTitle||"").includes(qn);
+    const textOk=!qn||normalize(el.dataset.dealName||"").includes(qn)||normalize(el.dataset.dealStore||"").includes(qn)||normalize(el.dataset.dealTitle||"").includes(qn);
+    const storeOk=allStoresActive||_dealStoreFilter.includes(el.dataset.dealStoreId||"");
+    el.hidden=!textOk||!storeOk;
   });
   const fe=document.getElementById("deals-filter-empty");
   const hasDealItems=!!c.querySelector("[data-deal-id]");
-  if(fe)fe.hidden=!qn||!hasDealItems||!!c.querySelector("[data-deal-id]:not([hidden])");
+  const anyFilter=qn||!allStoresActive;
+  if(fe)fe.hidden=!anyFilter||!hasDealItems||!!c.querySelector("[data-deal-id]:not([hidden])");
 }
 function _dealsSearchBar(){const v=_lf.deals;return`<div style="position:relative;margin-bottom:10px;"><input id="search-deals" type="text" value="${esc(v)}" oninput="dealsSearchInput(this.value)" placeholder="🔍 Aktion suchen..." style="width:100%;padding:8px ${v?"32px":"12px"} 8px 12px;border:1.5px solid #E5E7EB;border-radius:10px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;background:#FAFAFA;"><button id="deals-search-clear" onclick="dealsSearchInput('')" style="display:${v?"":"none"};position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9CA3AF;font-size:18px;line-height:1;cursor:pointer;padding:0;">×</button></div>`;}
 function tmplSearchInput(val){_tmplQuery=val;_lf.template=val.toLowerCase().trim();clearTimeout(_tmplSearchTimer);if(!val.trim()){applyTmplFilter("");}else{_tmplSearchTimer=setTimeout(()=>applyTmplFilter(_tmplQuery),150);}}
@@ -789,6 +795,53 @@ function renderDealImage(d,fbKey){
   return`<div style="padding:40px;text-align:center;background:#F9FAFB;border-radius:10px;color:#9CA3AF;font-size:13px;">Kein Snapshot verfügbar</div>`;
 }
 
+function dealCardThumb(d,emoji){
+  const st="width:64px;height:64px;border-radius:10px;object-fit:cover;flex-shrink:0;background:#F9FAFB;";
+  const fb=`this.outerHTML='<div style=&quot;width:64px;height:64px;border-radius:10px;background:#F3F4F6;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;&quot;>${emoji}</div>'`;
+  if(d.imageUrl)return`<img src="${esc(d.imageUrl)}" style="${st}" onerror="${fb}">`;
+  if(d.leafletId!==undefined&&d.pageIndex!==undefined){
+    const url=`https://mgat.b-cdn.net/api/v1/leaflets/${d.leafletId}/images/pages/${d.pageIndex}/xlarge.webp`;
+    return`<img src="${url}" style="${st}" onerror="${fb}">`;
+  }
+  return`<div style="width:64px;height:64px;border-radius:10px;background:#F3F4F6;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;">${emoji}</div>`;
+}
+function setDealSort(val){
+  _dealSort=val;
+  localStorage.setItem("dealSort",val);
+  render();
+}
+function toggleDealStoreChip(storeId){
+  const allActive=!_dealStoreFilter||_dealStoreFilter.length===0;
+  if(allActive){
+    _dealStoreFilter=[storeId];
+  } else if(_dealStoreFilter.includes(storeId)){
+    _dealStoreFilter=_dealStoreFilter.filter(s=>s!==storeId);
+    if(_dealStoreFilter.length===0)_dealStoreFilter=null;
+  } else {
+    _dealStoreFilter=[..._dealStoreFilter,storeId];
+  }
+  localStorage.setItem("dealStoreFilter",JSON.stringify(_dealStoreFilter));
+  document.querySelectorAll("[data-deal-chip]").forEach(btn=>{
+    const id=btn.dataset.dealChip;
+    const active=!_dealStoreFilter||_dealStoreFilter.length===0||_dealStoreFilter.includes(id);
+    btn.style.background=active?"#1C2B1A":"#F3F4F6";
+    btn.style.color=active?"white":"#374151";
+  });
+  applyDealsFilter(_dealsQuery);
+}
+function _dealsFilterBar(deals){
+  const storeIds=[...new Set(deals.map(d=>d.storeId).filter(Boolean))];
+  const allActive=!_dealStoreFilter||_dealStoreFilter.length===0;
+  const chips=storeIds.map(id=>{
+    const store=storeById(id)||{emoji:"🏪",name:id};
+    const active=allActive||_dealStoreFilter.includes(id);
+    return`<button data-deal-chip="${esc(id)}" onclick="toggleDealStoreChip('${esc(id)}')" style="flex-shrink:0;border:none;border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s;background:${active?"#1C2B1A":"#F3F4F6"};color:${active?"white":"#374151"};font-family:'DM Sans',sans-serif;">${esc(store.emoji)} ${esc(store.name)}</button>`;
+  }).join("");
+  const opts=[["newest","Neueste"],["name-asc","Name A→Z"],["price-asc","Preis ↑"],["saving-desc","Ersparnis ↓"]];
+  const sortSel=`<select onchange="setDealSort(this.value)" style="flex-shrink:0;border:1.5px solid #E5E7EB;border-radius:10px;padding:5px 8px;font-size:12px;font-weight:600;background:#FAFAFA;color:#111827;font-family:'DM Sans',sans-serif;cursor:pointer;outline:none;">${opts.map(([v,l])=>`<option value="${v}"${_dealSort===v?" selected":""}>${l}</option>`).join("")}</select>`;
+  return`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><div style="display:flex;gap:8px;align-items:center;width:100%;">${sortSel}<div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;flex:1;padding-bottom:2px;">${chips}</div></div></div>`;
+}
+
 function cropImageToCanvas(imageUrl,bbox,canvasId,paddingNorm=0.03){
   const img=new Image();
   img.onload=()=>{
@@ -1084,28 +1137,36 @@ function render(){
     ? [80,60,72,50,65].map(w=>`<div style="background:white;border-radius:15px;padding:14px;margin-bottom:8px;"><div style="height:14px;width:${w}%;background:#F3F4F6;border-radius:6px;animation:pulse 1.2s ease-in-out infinite;"></div><div style="height:10px;width:40%;background:#F3F4F6;border-radius:6px;margin-top:10px;animation:pulse 1.2s ease-in-out infinite;"></div></div>`).join("")
     : deals.length === 0
     ? `<div style="text-align:center;color:#9CA3AF;padding:44px 0;"><div style="font-size:40px;">🏷️</div><p style="margin-top:8px;">Keine aktuellen Aktionen</p><p style="font-size:12px;margin-top:4px;">Das Skript sucht täglich nachts automatisch</p><a href="https://www.marktguru.at/angebote" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;margin-top:16px;padding:11px 20px;background:#1C2B1A;color:white;text-decoration:none;border-radius:12px;font-size:13px;font-weight:700;">🌐 Auf marktguru.at suchen →</a></div>`
-    : deals.map(d=>{
-      const store=storeById(d.storeId);
-      const link=d.url||mgUrl(d.articleName||"");
-      return `<div data-deal-id="${d.fbKey}" data-deal-name="${esc(d.articleName||"")}" data-deal-store="${esc(d.storeName||"")}" data-deal-title="${esc(d.title||"")}" style="background:white;border-radius:15px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,0.06);margin-bottom:8px;">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
-          <div style="flex:1;">
-            <div style="font-weight:700;font-size:15px;color:#111827;margin-bottom:7px;">${esc(d.articleName||"")}</div>
-            <div style="display:flex;gap:5px;flex-wrap:wrap;">
-              <span style="font-size:11px;padding:2px 9px;border-radius:8px;background:${store?store.color+"18":"#F3F4F6"};color:${store?store.color:"#6B7280"};font-weight:700;">${store?store.emoji+" ":""} ${esc(d.storeName||"")}</span>
-              ${d.price?`<span style="font-size:11px;padding:2px 9px;border-radius:8px;background:#FEF3C7;color:#D97706;font-weight:700;">💰 ${esc(d.price)}</span>`:""}
-              ${d.savings?`<span style="font-size:11px;padding:2px 9px;border-radius:8px;background:#DCFCE7;color:#16A34A;font-weight:700;">📉 ${esc(d.savings)}</span>`:""}
+    : (()=>{
+      const sd=[...deals];
+      if(_dealSort==="name-asc")sd.sort((a,b)=>(a.articleName||"").localeCompare(b.articleName||"","de"));
+      else if(_dealSort==="price-asc")sd.sort((a,b)=>parsePrice(a.price)-parsePrice(b.price));
+      else if(_dealSort==="saving-desc")sd.sort((a,b)=>parsePrice(b.savings)-parsePrice(a.savings));
+      return sd.map(d=>{
+        const store=storeById(d.storeId);
+        const link=d.url||mgUrl(d.articleName||"");
+        const thumb=dealCardThumb(d,store?store.emoji:"🏪");
+        return `<div data-deal-id="${d.fbKey}" data-deal-name="${esc(d.articleName||"")}" data-deal-store="${esc(d.storeName||"")}" data-deal-title="${esc(d.title||"")}" data-deal-store-id="${esc(d.storeId||"")}" style="background:white;border-radius:15px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,0.06);margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+            ${thumb}
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:700;font-size:15px;color:#111827;margin-bottom:7px;">${esc(d.articleName||"")}</div>
+              <div style="display:flex;gap:5px;flex-wrap:wrap;">
+                <span style="font-size:11px;padding:2px 9px;border-radius:8px;background:${store?store.color+"18":"#F3F4F6"};color:${store?store.color:"#6B7280"};font-weight:700;">${store?store.emoji+" ":""} ${esc(d.storeName||"")}</span>
+                ${d.price?`<span style="font-size:11px;padding:2px 9px;border-radius:8px;background:#FEF3C7;color:#D97706;font-weight:700;">💰 ${esc(d.price)}</span>`:""}
+                ${d.savings?`<span style="font-size:11px;padding:2px 9px;border-radius:8px;background:#DCFCE7;color:#16A34A;font-weight:700;">📉 ${esc(d.savings)}</span>`:""}
+              </div>
+              ${d.validUntil?`<div style="font-size:11px;color:#9CA3AF;margin-top:4px;">⏳ bis ${esc(d.validUntil)}</div>`:""}
+              <a href="${link}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;margin-top:8px;font-size:11px;color:#1C2B1A;font-weight:600;text-decoration:none;">🌐 Auf marktguru ansehen →</a>
             </div>
-            ${d.validUntil?`<div style="font-size:11px;color:#9CA3AF;margin-top:4px;">⏳ bis ${esc(d.validUntil)}</div>`:""}
-            <a href="${link}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;margin-top:8px;font-size:11px;color:#1C2B1A;font-weight:600;text-decoration:none;">🌐 Auf marktguru ansehen →</a>
+            ${d.price?`<div style="background:#F0FDF4;border-radius:11px;padding:9px 13px;text-align:center;flex-shrink:0;"><div style="font-size:17px;font-weight:800;color:#16A34A;">${esc(d.price)}</div></div>`:""}
           </div>
-          ${d.price?`<div style="background:#F0FDF4;border-radius:11px;padding:9px 13px;text-align:center;flex-shrink:0;"><div style="font-size:17px;font-weight:800;color:#16A34A;">${esc(d.price)}</div></div>`:""}
-        </div>
-      </div>`;
-    }).join("");
+        </div>`;
+      }).join("");
+    })();
 
   const dealsFilterEmpty=`<div id="deals-filter-empty" hidden style="text-align:center;color:#9CA3AF;padding:20px 0;font-size:14px;">Keine Aktionen gefunden</div>`;
-  document.getElementById("tab-deals").innerHTML=_dealsSearchBar()+`<div id="deals-items-container">${dealsHtml}${dealsFilterEmpty}</div>`;
+  document.getElementById("tab-deals").innerHTML=_dealsFilterBar(deals)+_dealsSearchBar()+`<div id="deals-items-container">${dealsHtml}${dealsFilterEmpty}</div>`;
   applyDealsFilter(_dealsQuery);
 
   // ── NOTIFS (fixed: filter by to===currentUser) ──
