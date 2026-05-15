@@ -131,6 +131,7 @@ input,select,textarea,button{font-family:'DM Sans',sans-serif;}
     <button class="tab-btn active" data-tab="list"     onclick="switchTab('list')"    ><div style="font-size:16px;">📋</div>Liste</button>
     <button class="tab-btn"        data-tab="template" onclick="switchTab('template')"><div style="font-size:16px;">📌</div>Zu besorgen</button>
     <button class="tab-btn"        data-tab="deals"    onclick="switchTab('deals')"   style="position:relative;"><div style="font-size:16px;">🏷️</div>Rabatte<span id="dealBadge" style="display:none;position:absolute;top:5px;right:calc(50% - 14px);background:#ef4444;color:white;border-radius:7px;font-size:8px;padding:1px 4px;font-weight:700;"></span></button>
+    <button class="tab-btn"        data-tab="leaflets" onclick="switchTab('leaflets')" ><div style="font-size:16px;">📰</div>Flugblätter</button>
     <button class="tab-btn"        data-tab="notifs"   onclick="switchTab('notifs')"  style="position:relative;"><div style="font-size:16px;">🔔</div>News<span id="notifBadge" style="display:none;position:absolute;top:5px;right:calc(50% - 14px);background:#ef4444;color:white;border-radius:7px;font-size:8px;padding:1px 4px;font-weight:700;"></span></button>
   </div>
 
@@ -138,6 +139,7 @@ input,select,textarea,button{font-family:'DM Sans',sans-serif;}
     <div id="tab-list"></div>
     <div id="tab-template" style="display:none;"></div>
     <div id="tab-deals"    style="display:none;"></div>
+    <div id="tab-leaflets" style="display:none;"></div>
     <div id="tab-notifs"   style="display:none;"></div>
   </div>
 
@@ -276,7 +278,7 @@ const FB_CFG={
 };
 
 let db=null, currentUser=null, currentTab="list", addTarget="list", listSort="default", shoppingSort="default";
-let state={items:{},template:{},deals:{},notifications:{},activeMarkets:null,favorites:{}};
+let state={items:{},template:{},deals:{},notifications:{},activeMarkets:null,favorites:{},leaflets:{}};
 let _listQuery="",_listSearchTimer=null,_renderListItem=null,_tmplQuery="",_tmplSearchTimer=null,_dealsQuery="",_dealsSearchTimer=null;
 let _dealSort=localStorage.getItem("dealSort")||"newest";
 let _dealStoreFilter=(()=>{try{return JSON.parse(localStorage.getItem("dealStoreFilter")||"null");}catch(e){return null;}})();
@@ -294,6 +296,7 @@ function attachListeners(){
   ["items","template","deals","notifications"].forEach(k=>{
     db.ref(k).on("value",snap=>{state[k]=snap.val()||{};render();});
   });
+  db.ref("leaflets").on("value",snap=>{state.leaflets=snap.val()||{};render();});
   db.ref("favorites").on("value",snap=>{state.favorites=snap.val()||{};render();});
   db.ref("settings/activeMarkets").on("value",snap=>{
     const val=snap.val();
@@ -511,8 +514,8 @@ function _searchBar(key,ph){const v=_lf[key];return`<div style="position:relativ
 function switchTab(t){
   currentTab=t;
   document.querySelectorAll(".tab-btn").forEach(b=>b.classList.toggle("active",b.getAttribute("data-tab")===t));
-  ["list","template","deals","notifs"].forEach(k=>document.getElementById("tab-"+k).style.display=k===t?"block":"none");
-  document.getElementById("mainFab").style.display=t==="notifs"?"none":"flex";
+  ["list","template","deals","leaflets","notifs"].forEach(k=>document.getElementById("tab-"+k).style.display=k===t?"block":"none");
+  document.getElementById("mainFab").style.display=(t==="notifs"||t==="leaflets")?"none":"flex";
   document.getElementById("fabLabel").textContent=t==="template"?"Zu besorgen hinzufügen":"Artikel hinzufügen";
   document.getElementById("mainFab").style.background=t==="template"?"#6D28D9":"#1C2B1A";
   document.getElementById("mainFab").style.boxShadow=t==="template"?"0 8px 24px rgba(109,40,217,0.45)":"0 8px 24px rgba(28,43,26,0.5)";
@@ -843,7 +846,17 @@ function openDealLightbox(url,event){
   document.getElementById("dealLightboxImg").src=url;
   lb.style.display="flex";
 }
-document.addEventListener("keydown",e=>{if(e.key==="Escape"){const lb=document.getElementById("dealLightbox");if(lb)lb.style.display="none";}});
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape"){
+    const lb=document.getElementById("dealLightbox");if(lb)lb.style.display="none";
+    closeLeafletViewer();
+  }
+  const lv=document.getElementById("leafletViewer");
+  if(lv&&lv.style.display!=="none"){
+    if(e.key==="ArrowLeft")leafletPage(-1);
+    if(e.key==="ArrowRight")leafletPage(1);
+  }
+});
 function _dealsFilterBar(deals){
   const storeIds=[...new Set(deals.map(d=>d.storeId).filter(Boolean))];
   const allActive=!_dealStoreFilter||_dealStoreFilter.length===0;
@@ -855,6 +868,78 @@ function _dealsFilterBar(deals){
   const opts=[["newest","Neueste"],["name-asc","Name A→Z"],["price-asc","Preis ↑"],["saving-desc","Ersparnis ↓"]];
   const sortSel=`<select onchange="setDealSort(this.value)" style="flex-shrink:0;border:1.5px solid #E5E7EB;border-radius:10px;padding:5px 8px;font-size:12px;font-weight:600;background:#FAFAFA;color:#111827;font-family:'DM Sans',sans-serif;cursor:pointer;outline:none;">${opts.map(([v,l])=>`<option value="${v}"${_dealSort===v?" selected":""}>${l}</option>`).join("")}</select>`;
   return`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><div style="display:flex;gap:8px;align-items:center;width:100%;">${sortSel}<div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;flex:1;padding-bottom:2px;">${chips}</div></div></div>`;
+}
+
+// ── Flugblätter-Tab ──────────────────────────────────────────────────────────
+let _lv={leafletId:null,page:0,pages:0};
+function _fmtDate(iso){if(!iso)return"";const[,m,d]=iso.split("-");return`${d}.${m}.`;}
+function renderLeafletsTab(){
+  const am=state.activeMarkets;
+  const allLeaflets=[];
+  Object.entries(state.leaflets||{}).forEach(([rid,byId])=>{
+    if(!byId)return;
+    if(am&&am.length>0&&!am.includes(rid))return;
+    Object.values(byId).forEach(l=>allLeaflets.push(l));
+  });
+  if(!allLeaflets.length){
+    document.getElementById("tab-leaflets").innerHTML=`<div style="text-align:center;color:#9CA3AF;padding:44px 0;"><div style="font-size:40px;">📰</div><p style="margin-top:8px;">Keine Flugblätter verfügbar</p><p style="font-size:12px;margin-top:4px;">Das Skript lädt täglich nachts automatisch</p></div>`;
+    return;
+  }
+  const byMarket={};
+  allLeaflets.forEach(l=>{if(!byMarket[l.retailerId])byMarket[l.retailerId]=[];byMarket[l.retailerId].push(l);});
+  let html="";
+  for(const[rid,leaflets]of Object.entries(byMarket)){
+    const store=storeById(rid)||{emoji:"🏪",name:rid};
+    const cards=leaflets.map(l=>{
+      const thumb=`https://mgat.b-cdn.net/api/v1/leaflets/${esc(l.leafletId)}/images/pages/0/xlarge.webp`;
+      const validity=`${_fmtDate(l.validFrom)} – ${_fmtDate(l.validTo)}`;
+      return`<div onclick="openLeafletViewer('${esc(l.leafletId)}',${l.pageCount||1})" style="background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);cursor:pointer;">
+        <img src="${thumb}" style="width:100%;height:150px;object-fit:cover;display:block;background:#F3F4F6;" onerror="this.style.opacity='0'">
+        <div style="padding:8px 9px;">
+          <div style="font-size:11px;font-weight:700;color:#111827;">${esc(validity)}</div>
+          <div style="font-size:10px;color:#9CA3AF;margin-top:2px;">${l.pageCount||"?"} Seiten</div>
+        </div>
+      </div>`;
+    }).join("");
+    html+=`<div style="margin-bottom:18px;"><div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:8px;">${esc(store.emoji)} ${esc(store.name)}</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">${cards}</div></div>`;
+  }
+  document.getElementById("tab-leaflets").innerHTML=html;
+}
+function openLeafletViewer(leafletId,pageCount){
+  _lv={leafletId,page:0,pages:pageCount};
+  let v=document.getElementById("leafletViewer");
+  if(!v){
+    v=document.createElement("div");
+    v.id="leafletViewer";
+    v.style.cssText="position:fixed;inset:0;z-index:9100;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;";
+    v.innerHTML=`
+      <button onclick="closeLeafletViewer()" style="position:absolute;top:14px;right:14px;background:rgba(255,255,255,0.18);border:none;color:white;font-size:28px;line-height:1;cursor:pointer;padding:5px 11px;border-radius:8px;z-index:1;">×</button>
+      <button id="lvPrev" onclick="leafletPage(-1)" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.18);border:none;color:white;font-size:28px;line-height:1;cursor:pointer;padding:8px 14px;border-radius:10px;z-index:1;">‹</button>
+      <button id="lvNext" onclick="leafletPage(1)"  style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.18);border:none;color:white;font-size:28px;line-height:1;cursor:pointer;padding:8px 14px;border-radius:10px;z-index:1;">›</button>
+      <img id="lvImg" style="max-width:100vw;max-height:calc(100vh - 60px);object-fit:contain;display:block;" onclick="event.stopPropagation()">
+      <div id="lvIndicator" style="position:absolute;bottom:14px;left:50%;transform:translateX(-50%);color:white;font-size:13px;font-weight:600;background:rgba(0,0,0,0.55);padding:4px 14px;border-radius:20px;pointer-events:none;"></div>`;
+    let _tx=0;
+    v.addEventListener("touchstart",e=>{_tx=e.touches[0].clientX;},{passive:true});
+    v.addEventListener("touchend",e=>{const dx=e.changedTouches[0].clientX-_tx;if(Math.abs(dx)>50)leafletPage(dx<0?1:-1);},{passive:true});
+    document.body.appendChild(v);
+  }
+  v.style.display="flex";
+  _lvShowPage();
+}
+function closeLeafletViewer(){const v=document.getElementById("leafletViewer");if(v)v.style.display="none";}
+function _lvShowPage(){
+  const{leafletId,page,pages}=_lv;
+  const url=`https://mgat.b-cdn.net/api/v1/leaflets/${leafletId}/images/pages/${page}/xlarge.webp`;
+  document.getElementById("lvImg").src=url;
+  document.getElementById("lvIndicator").textContent=`${page+1} / ${pages}`;
+  document.getElementById("lvPrev").style.opacity=page===0?"0.35":"1";
+  document.getElementById("lvNext").style.opacity=page>=pages-1?"0.35":"1";
+  if(page+1<pages)new Image().src=`https://mgat.b-cdn.net/api/v1/leaflets/${leafletId}/images/pages/${page+1}/xlarge.webp`;
+}
+function leafletPage(dir){
+  const n=_lv.page+dir;
+  if(n<0||n>=_lv.pages)return;
+  _lv.page=n;_lvShowPage();
 }
 
 function cropImageToCanvas(imageUrl,bbox,canvasId,paddingNorm=0.03){
@@ -1183,6 +1268,9 @@ function render(){
   const dealsFilterEmpty=`<div id="deals-filter-empty" hidden style="text-align:center;color:#9CA3AF;padding:20px 0;font-size:14px;">Keine Aktionen gefunden</div>`;
   document.getElementById("tab-deals").innerHTML=_dealsFilterBar(deals)+_dealsSearchBar()+`<div id="deals-items-container">${dealsHtml}${dealsFilterEmpty}</div>`;
   applyDealsFilter(_dealsQuery);
+
+  // ── LEAFLETS ──
+  renderLeafletsTab();
 
   // ── NOTIFS (fixed: filter by to===currentUser) ──
   document.getElementById("tab-notifs").innerHTML=notifs.length===0
