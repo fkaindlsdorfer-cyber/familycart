@@ -796,12 +796,12 @@ function renderDealImage(d,fbKey){
 }
 
 function dealCardThumb(d,emoji){
-  const st="width:64px;height:64px;border-radius:10px;object-fit:cover;flex-shrink:0;background:#F9FAFB;";
+  const st="width:64px;height:64px;border-radius:10px;object-fit:cover;flex-shrink:0;background:#F9FAFB;cursor:zoom-in;";
   const fb=`this.outerHTML='<div style=&quot;width:64px;height:64px;border-radius:10px;background:#F3F4F6;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;&quot;>${emoji}</div>'`;
-  if(d.imageUrl)return`<img src="${esc(d.imageUrl)}" style="${st}" onerror="${fb}">`;
+  if(d.imageUrl)return`<img src="${esc(d.imageUrl)}" style="${st}" onerror="${fb}" onclick="openDealLightbox('${esc(d.imageUrl)}',event)">`;
   if(d.leafletId!==undefined&&d.pageIndex!==undefined){
     const url=`https://mgat.b-cdn.net/api/v1/leaflets/${d.leafletId}/images/pages/${d.pageIndex}/xlarge.webp`;
-    return`<img src="${url}" style="${st}" onerror="${fb}">`;
+    return`<img src="${url}" style="${st}" onerror="${fb}" onclick="openDealLightbox('${esc(url)}',event)">`;
   }
   return`<div style="width:64px;height:64px;border-radius:10px;background:#F3F4F6;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;">${emoji}</div>`;
 }
@@ -829,6 +829,21 @@ function toggleDealStoreChip(storeId){
   });
   applyDealsFilter(_dealsQuery);
 }
+function openDealLightbox(url,event){
+  event.stopPropagation();
+  let lb=document.getElementById("dealLightbox");
+  if(!lb){
+    lb=document.createElement("div");
+    lb.id="dealLightbox";
+    lb.style.cssText="position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;";
+    lb.onclick=e=>{if(e.target===lb)lb.style.display="none";};
+    lb.innerHTML=`<button onclick="document.getElementById('dealLightbox').style.display='none'" style="position:absolute;top:16px;right:16px;background:none;border:none;color:white;font-size:36px;line-height:1;cursor:pointer;padding:4px;">×</button><img id="dealLightboxImg" style="max-width:90vw;max-height:90vh;object-fit:contain;border-radius:10px;" onclick="event.stopPropagation()">`;
+    document.body.appendChild(lb);
+  }
+  document.getElementById("dealLightboxImg").src=url;
+  lb.style.display="flex";
+}
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){const lb=document.getElementById("dealLightbox");if(lb)lb.style.display="none";}});
 function _dealsFilterBar(deals){
   const storeIds=[...new Set(deals.map(d=>d.storeId).filter(Boolean))];
   const allActive=!_dealStoreFilter||_dealStoreFilter.length===0;
