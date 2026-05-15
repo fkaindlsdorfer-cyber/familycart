@@ -22,6 +22,8 @@ const ZIP_CODE                = "5204"; // Strasswalchen
 const SKIP_OUTDOOR_LEAFLETS = true; // "Outdoor"-Prospekte überspringen
 const DEBUG_MAXIMARKT = process.env.DEBUG_MAXIMARKT === "1";
 
+const ALL_MARKETS = ['hofer', 'lidl', 'eurospar', 'maximarkt'];
+
 initializeApp({ credential: cert(FIREBASE_SERVICE), databaseURL: FIREBASE_DB_URL });
 const db = getDatabase();
 
@@ -393,6 +395,37 @@ function isValidDeal(d) {
   return true;
 }
 
+// ── activeMarkets: households → legacy → default ──────────────────────────────
+async function loadActiveMarkets() {
+  const hhSnap = await db.ref('households').get();
+  const union = new Set();
+  hhSnap.forEach(hh => {
+    const am = hh.child('settings/activeMarkets').val();
+    if (Array.isArray(am)) am.forEach(m => union.add(m));
+    return false;
+  });
+  if (union.size > 0) {
+    console.log(`[markets] source=households, markets=${[...union].join(',')}`);
+    return [...union];
+  }
+
+  const flatSnap = await db.ref('settings/activeMarkets').get();
+  const flatVal = flatSnap.val();
+  if (Array.isArray(flatVal) && flatVal.length > 0) {
+    console.log(`[markets] source=legacy, markets=${flatVal.join(',')}`);
+    return flatVal;
+  }
+
+  console.log(`[markets] source=default, markets=${ALL_MARKETS.join(',')}`);
+  return ALL_MARKETS;
+}
+
+// ── Dual-write: /deals/global (neu) + /deals (Legacy bis PR 3) ────────────────
+async function writeDeals(deals) {
+  await db.ref('deals/global').set(deals);
+  await db.ref('deals').set(deals);  // Legacy, wird in PR 3 entfernt
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
   console.log("═══════════════════════════════════════════════════");
@@ -402,17 +435,12 @@ async function main() {
   console.log("═══════════════════════════════════════════════════\n");
 
   // Aktive Märkte + Artikel aus Firebase laden
-  const [itemsSnap, templateSnap, settingsSnap] = await Promise.all([
+  const [itemsSnap, templateSnap, activeMarkets] = await Promise.all([
     db.ref("items").get(),
     db.ref("template").get(),
-    db.ref("settings/activeMarkets").get(),
+    loadActiveMarkets(),
   ]);
 
-  let activeMarkets = settingsSnap.val();
-  if (!Array.isArray(activeMarkets) || activeMarkets.length === 0) {
-    console.warn("⚠️  activeMarkets not set, falling back to defaults");
-    activeMarkets = ["hofer", "lidl", "eurospar", "maximarkt"];
-  }
   console.log(`🏪 Aktive Märkte: ${activeMarkets.join(", ")}\n`);
 
   const allItems = [
@@ -521,7 +549,7 @@ async function main() {
   if (validDeals.length > 0) {
     const dealsObj = {};
     validDeals.forEach((d, i) => { dealsObj[`deal_${Date.now()}_${i}`] = d; });
-    await db.ref("deals").set(dealsObj);
+    await writeDeals(dealsObj);
 
     const top = validDeals.slice(0, 3).map(d => `${d.articleName} bei ${d.storeName}`).join(", ");
     await db.ref("notifications").push({
@@ -533,7 +561,7 @@ async function main() {
     const maxiCount = validDeals.filter(d => d.storeId === "maximarkt").length;
     if (maxiCount > 0) console.log(`   davon Maximarkt: ${maxiCount}`);
   } else {
-    await db.ref("deals").set(null);
+    await writeDeals(null);
     console.log("\n📭 Keine Aktionen gefunden.");
   }
 
