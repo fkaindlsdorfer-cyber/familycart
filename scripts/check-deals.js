@@ -120,6 +120,60 @@ async function fetchMaximarktLeaflets() {
   return active;
 }
 
+// ── Leaflet-Metadaten: alle aktiven Märkte → Firebase /leaflets ──────────────
+async function fetchLeafletsForMarket(retailerId, keys) {
+  const url = `https://api.marktguru.at/api/v1/publishers/retailer/${retailerId}/leaflets?as=mobile&limit=20&offset=0&zipCode=4910`;
+  const res = await fetch(url, {
+    headers: {
+      "X-ApiKey":    keys.apiKey,
+      "X-ClientKey": keys.clientKey,
+      "User-Agent":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    }
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.results || [];
+}
+
+async function persistLeafletMetadata(activeMarkets) {
+  console.log("\n📰 Persistiere Leaflet-Metadaten...");
+  let keys;
+  try { keys = await getMarktguruKeys(); }
+  catch (e) { console.warn("   ⚠️  API-Keys nicht abrufbar:", e.message); return; }
+
+  const todayMs = new Date().setHours(0, 0, 0, 0);
+  const fetchedAt = new Date().toISOString();
+
+  for (const retailerId of activeMarkets) {
+    try {
+      const results = await fetchLeafletsForMarket(retailerId, keys);
+      if (!results) { console.log(`   ⏭️  ${retailerId}: kein API-Zugriff`); continue; }
+
+      const active  = results.filter(r => new Date(r.validTo).getTime() >= todayMs);
+      const expired = results.filter(r => new Date(r.validTo).getTime() <  todayMs);
+
+      for (const r of active) {
+        const leafletId = String(r.mainLeafletId || r.id);
+        await db.ref(`leaflets/${retailerId}/${leafletId}`).set({
+          retailerId,
+          leafletId,
+          pageCount: r.pageCount ?? 1,
+          validFrom: r.validFrom?.slice(0, 10) ?? null,
+          validTo:   r.validTo?.slice(0, 10)   ?? null,
+          fetchedAt,
+        });
+      }
+      for (const r of expired) {
+        const leafletId = String(r.mainLeafletId || r.id);
+        await db.ref(`leaflets/${retailerId}/${leafletId}`).remove();
+      }
+      console.log(`   ✅ ${retailerId}: ${active.length} aktiv, ${expired.length} abgelaufen gelöscht`);
+    } catch (e) {
+      console.warn(`   ⚠️  ${retailerId}: ${e.message}`);
+    }
+  }
+}
+
 // ── Gemini API-Call mit Retry + Fehlerklassifizierung ────────────────────────
 async function callGeminiWithRetry(base64, prompt, maxRetries = 3) {
   const PERMANENT_ERRORS = [400, 401, 403, 404];
@@ -482,6 +536,8 @@ async function main() {
     await db.ref("deals").set(null);
     console.log("\n📭 Keine Aktionen gefunden.");
   }
+
+  await persistLeafletMetadata(activeMarkets);
 
   console.log("\n═══════════════════════════════════════════════════");
   console.log(`✅ Fertig! ${validDeals.length} Deals`);
