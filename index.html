@@ -873,11 +873,15 @@ let _lv={leafletId:null,page:0,pages:0};
 function _fmtDate(iso){if(!iso)return"";const[,m,d]=iso.split("-");return`${d}.${m}.`;}
 function renderLeafletsTab(){
   const am=state.activeMarkets;
+  const _todayStr=(()=>{const d=new Date();const m=String(d.getMonth()+1).padStart(2,"0");const day=String(d.getDate()).padStart(2,"0");return `${d.getFullYear()}-${m}-${day}`;})();
   const allLeaflets=[];
   Object.entries(state.leaflets||{}).forEach(([rid,byId])=>{
     if(!byId)return;
     if(am&&am.length>0&&!am.includes(rid))return;
-    Object.values(byId).forEach(l=>allLeaflets.push(l));
+    Object.values(byId).forEach(l=>{
+      if(l.validTo&&l.validTo<_todayStr)return;
+      allLeaflets.push(l);
+    });
   });
   if(!allLeaflets.length){
     document.getElementById("tab-leaflets").innerHTML=`<div style="text-align:center;color:#9CA3AF;padding:44px 0;"><div style="font-size:40px;">📰</div><p style="margin-top:8px;">Keine Flugblätter verfügbar</p><p style="font-size:12px;margin-top:4px;">Das Skript lädt täglich nachts automatisch</p></div>`;
