@@ -157,7 +157,6 @@ input,select,textarea,button{font-family:'DM Sans',sans-serif;}
         <div style="font-family:'Playfair Display',serif;font-size:19px;font-weight:700;color:white;">Einkaufsmodus</div>
         <div id="shopProgress" style="font-size:12px;color:#94a3b8;margin-top:2px;"></div>
       </div>
-      <button onclick="resetTemplate()" class="tap" style="background:rgba(255,255,255,0.08);border:none;border-radius:10px;padding:8px 12px;color:#94a3b8;font-size:12px;cursor:pointer;">🔄 Reset</button>
     </div>
     <div style="background:rgba(255,255,255,0.08);border-radius:99px;height:6px;overflow:hidden;margin-top:12px;">
       <div id="shopProgressBar" style="background:linear-gradient(90deg,#4ade80,#22c55e);height:100%;border-radius:99px;width:0%;transition:width .4s ease;"></div>
@@ -556,7 +555,6 @@ function toggleTemplate(k){const i=state.template[k];if(!i)return;db.ref("templa
 function deleteTemplate(k){db.ref("template/"+k).remove();}
 function clearDone(){Object.entries(state.items).forEach(([k,v])=>{if(v.done)db.ref("items/"+k).remove();});}
 function clearBought(){Object.entries(state.template).forEach(([k,v])=>{if(v.bought)db.ref("template/"+k).remove();});}
-function resetTemplate(){Object.keys(state.template).forEach(k=>db.ref("template/"+k).update({bought:false}));}
 
 function pushNotif(msg){
   if(!db||!currentUser)return;
@@ -1204,7 +1202,6 @@ function render(){
     ${tmpl.length>0?`<div style="background:rgba(255,255,255,0.15);border-radius:99px;height:5px;overflow:hidden;margin-bottom:10px;"><div style="background:#A78BFA;height:100%;border-radius:99px;width:${tmpl.length?((tmplBought/tmpl.length)*100).toFixed(0):0}%;transition:width .4s;"></div></div>`:""}
     <div style="display:flex;gap:8px;">
       <button onclick="clearBought()" class="tap" style="flex:1;padding:8px 0;background:rgba(255,255,255,0.15);border:none;border-radius:9px;color:white;font-size:11px;font-weight:600;cursor:pointer;">🗑️ Erledigte löschen</button>
-      <button onclick="resetTemplate()" class="tap" style="flex:1;padding:8px 0;background:rgba(255,255,255,0.15);border:none;border-radius:9px;color:white;font-size:11px;font-weight:600;cursor:pointer;">🔄 Alle zurücksetzen</button>
     </div>
   </div>`;
   let tmplItemsHtml="";
